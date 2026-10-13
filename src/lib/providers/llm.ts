@@ -114,14 +114,30 @@ export async function completeJson<T>(
         ? messages
         : [...messages, { role: "user", content: `Your previous reply was invalid (${lastError}). Reply again with ONLY a valid JSON object matching the schema.` }];
     const raw = await withFallback(async (ep) => {
-      const res = await ep.client.chat.completions.create({
-        model: modelFor(ep, opts.role ?? "extract"),
-        messages: msgs,
-        temperature: 0,
-        max_tokens: opts.maxTokens ?? 900,
-        response_format: { type: "json_object" },
-      });
-      return res.choices[0]?.message?.content ?? "";
+      try {
+        const res = await ep.client.chat.completions.create({
+          model: modelFor(ep, opts.role ?? "extract"),
+          messages: msgs,
+          temperature: 0,
+          max_tokens: opts.maxTokens ?? 900,
+          response_format: { type: "json_object" },
+        });
+        return res.choices[0]?.message?.content ?? "";
+      } catch (err: unknown) {
+        // Groq sometimes returns 400 json_validate_failed / failed_generation when strict schema mode is forced
+        const code = (err as { code?: string; error?: { code?: string } })?.code || (err as { error?: { code?: string } })?.error?.code;
+        if (code === "json_validate_failed" || (err as Error)?.message?.includes("Failed to generate JSON") || (err as Error)?.message?.includes("Failed to validate JSON")) {
+          console.warn("[llm] response_format json_object failed, retrying without json_object constraint:", (err as Error).message);
+          const fallbackRes = await ep.client.chat.completions.create({
+            model: modelFor(ep, opts.role ?? "extract"),
+            messages: msgs,
+            temperature: 0,
+            max_tokens: opts.maxTokens ?? 900,
+          });
+          return fallbackRes.choices[0]?.message?.content ?? "";
+        }
+        throw err;
+      }
     });
     try {
       const parsed = schema.safeParse(extractJson(raw));
