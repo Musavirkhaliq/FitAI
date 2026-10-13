@@ -2,6 +2,12 @@ import type { DaySummaryDto, FoodEntryDto, MealType, TotalsDto } from "@/lib/cli
 
 export const MEAL_ORDER: MealType[] = ["BREAKFAST", "LUNCH", "DINNER", "SNACK"];
 
+/** Reported by every "add food" path so the page can confirm it and offer Undo. `undoId` is null when the save was queued offline. */
+export interface SavedInfo { queued: boolean; label: string; undoId: string | null }
+
+/** What an inline edit may change on a logged entry. */
+export interface EntryPatch { quantity?: number; meal?: MealType }
+
 export const isDay = (s: string | null | undefined): s is string => !!s && /^\d{4}-\d{2}-\d{2}$/.test(s);
 
 /** Add whole days to a YYYY-MM-DD string without touching the viewer's timezone. */

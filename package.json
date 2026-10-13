@@ -1,5 +1,5 @@
 {
-  "name": "fittrack-ai",
+  "name": "sukoonfit",
   "version": "0.1.0",
   "private": true,
   "scripts": {
@@ -7,6 +7,7 @@
     "build": "prisma generate && next build",
     "start": "next start",
     "lint": "tsc --noEmit",
+    "check:contrast": "node scripts/check-contrast.mjs",
     "test": "vitest run",
     "db:push": "dotenv -e .env.local -- prisma db push",
     "db:migrate": "dotenv -e .env.local -- prisma migrate dev",

@@ -1,34 +1,77 @@
 "use client";
 import { Minus, Plus } from "lucide-react";
-import { useId } from "react";
+import { useCallback, useEffect, useId, useRef } from "react";
+import { haptic } from "@/components/ui";
 
-/** Big gym-friendly number control: 56px steppers around an editable (or read-only) value. */
+const BTN =
+  "press flex h-16 w-16 shrink-0 touch-manipulation select-none items-center justify-center rounded-2xl border border-border bg-surface-2 text-fg transition-colors hover:bg-surface-3 active:bg-surface-3";
+
+/**
+ * One-hand number control for gym use: 64 px steppers around a big editable value. Press and hold to repeat.
+ * Pointer presses step immediately; keyboard activation arrives as a click with detail 0.
+ */
 export function Stepper({
-  label, unit, value, onChange, onStep, readOnly, inputMode = "decimal", hint,
+  label, unit, value, onChange, onStep, inputMode = "decimal", hint,
 }: {
-  label: string; unit?: string; value: string; onChange?: (v: string) => void; onStep: (dir: 1 | -1) => void;
-  readOnly?: boolean; inputMode?: "decimal" | "numeric"; hint?: string;
+  label: string; unit?: string; value: string; onChange: (v: string) => void; onStep: (dir: 1 | -1) => void; inputMode?: "decimal" | "numeric"; hint?: string;
 }) {
   const id = useId();
-  const btn = "flex h-14 w-14 shrink-0 items-center justify-center rounded-2xl border border-border bg-surface-2 text-fg transition-colors hover:bg-border active:scale-95";
+  const stepRef = useRef(onStep);
+  const timers = useRef<{ delay?: number; repeat?: number }>({});
+  useEffect(() => {
+    stepRef.current = onStep;
+  });
+
+  const stop = useCallback(() => {
+    window.clearTimeout(timers.current.delay);
+    window.clearInterval(timers.current.repeat);
+  }, []);
+  useEffect(() => stop, [stop]);
+
+  const press = (dir: 1 | -1) => (e: React.PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    stop();
+    haptic();
+    stepRef.current(dir);
+    timers.current.delay = window.setTimeout(() => {
+      timers.current.repeat = window.setInterval(() => stepRef.current(dir), 110);
+    }, 450);
+  };
+  const keyboard = (dir: 1 | -1) => (e: React.MouseEvent) => {
+    if (e.detail === 0) stepRef.current(dir);
+  };
+
+  const btnProps = (dir: 1 | -1) => ({
+    type: "button" as const,
+    className: BTN,
+    onPointerDown: press(dir),
+    onPointerUp: stop,
+    onPointerLeave: stop,
+    onPointerCancel: stop,
+    onClick: keyboard(dir),
+    onContextMenu: (e: React.MouseEvent) => e.preventDefault(),
+  });
+
   return (
     <div>
-      <label htmlFor={id} className="label">{label}{unit ? <span className="font-normal text-muted"> ({unit})</span> : null}</label>
-      <div className="flex items-center gap-2">
-        <button type="button" className={btn} onClick={() => onStep(-1)} aria-label={`Decrease ${label.toLowerCase()}`}><Minus className="h-6 w-6" aria-hidden /></button>
+      <label htmlFor={id} className="label !mb-2 flex items-baseline justify-between">
+        <span>{label}</span>
+        {unit && <span className="text-sm font-medium text-muted">{unit}</span>}
+      </label>
+      <div className="flex items-center gap-2.5">
+        <button {...btnProps(-1)} aria-label={`Decrease ${label.toLowerCase()}`}><Minus className="h-7 w-7" aria-hidden /></button>
         <input
           id={id}
-          className="input !min-h-[56px] min-w-0 flex-1 text-center text-2xl font-semibold tabular-nums"
+          className="input num !min-h-[64px] min-w-0 flex-1 !rounded-2xl text-center !text-[2.25rem] !font-bold"
           value={value}
           inputMode={inputMode}
-          readOnly={readOnly}
-          onChange={(e) => onChange?.(e.target.value)}
-          onFocus={(e) => !readOnly && e.target.select()}
+          onChange={(e) => onChange(e.target.value)}
+          onFocus={(e) => e.target.select()}
           autoComplete="off"
         />
-        <button type="button" className={btn} onClick={() => onStep(1)} aria-label={`Increase ${label.toLowerCase()}`}><Plus className="h-6 w-6" aria-hidden /></button>
+        <button {...btnProps(1)} aria-label={`Increase ${label.toLowerCase()}`}><Plus className="h-7 w-7" aria-hidden /></button>
       </div>
-      {hint && <p className="mt-1 text-center text-xs text-muted">{hint}</p>}
+      {hint && <p className="mt-1.5 text-center text-xs text-muted">{hint}</p>}
     </div>
   );
 }

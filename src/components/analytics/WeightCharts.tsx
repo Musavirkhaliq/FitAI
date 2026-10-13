@@ -1,20 +1,27 @@
 "use client";
-import { CartesianGrid, ComposedChart, Legend, Line, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
-import { ChartFrame, chartColors, tooltipStyle } from "@/components/ui";
+import { ArrowDownRight, ArrowRight, ArrowUpRight } from "lucide-react";
+import { Area, CartesianGrid, ComposedChart, Line, ReferenceDot, ResponsiveContainer, Tooltip, XAxis, YAxis } from "recharts";
+import { AnimatedNumber, ChartFrame, Tile, chartColors, tooltipStyle } from "@/components/ui";
 import { fmtDay, fmtNum, type UnitSystem } from "@/lib/client/format";
+import { SingleLine } from "./StackedCharts";
 import type { WeightPointDto } from "./types";
-import { padDomain, round1, shortDay, wUnit, wv } from "./util";
+import { compactNum, padDomain, round1, shortDay, signed, wUnit, wv } from "./util";
 
 export function ChartEmpty({ title, children }: { title: string; children: React.ReactNode }) {
   return (
-    <section className="card">
-      <h3 className="text-sm font-semibold">{title}</h3>
+    <section className="card rise">
+      <h3 className="display text-base font-bold">{title}</h3>
       <p className="mt-2 text-sm text-muted">{children}</p>
     </section>
   );
 }
 
-/** Raw weigh-ins as faint dots with the 7- and 14-day moving averages as lines: the trend matters, single days don't. */
+const AXIS = { fontSize: 11, fill: chartColors.muted };
+
+/**
+ * Weight leads with the 7-day average (the trend), never a single day. Raw weigh-ins sit behind it as faint dots.
+ * One series of one measure: a single axis, no second scale.
+ */
 export function WeightTrendChart({ series, units }: { series: WeightPointDto[]; units: UnitSystem }) {
   const title = "Weight trend";
   const u = wUnit(units);
@@ -25,27 +32,50 @@ export function WeightTrendChart({ series, units }: { series: WeightPointDto[]; 
   const a = last.ma7 ?? last.weight;
   const b = first.ma7 ?? first.weight;
   const diff = round1(a - b);
-  const summary = `${rows.length} weigh-ins from ${fmtDay(first.date)} to ${fmtDay(last.date)}. Your 7-day average moved from ${fmtNum(b, 1)} to ${fmtNum(a, 1)} ${u} (${diff > 0 ? "+" : diff < 0 ? "−" : ""}${fmtNum(Math.abs(diff), 1)} ${u}). Daily numbers bounce with water and food; the averages show the real direction.`;
+  const Icon = diff < -0.05 ? ArrowDownRight : diff > 0.05 ? ArrowUpRight : ArrowRight;
+  const summary = `${rows.length} weigh-ins from ${fmtDay(first.date)} to ${fmtDay(last.date)}. Your 7-day average moved from ${fmtNum(b, 1)} to ${fmtNum(a, 1)} ${u} (${diff > 0 ? "+" : diff < 0 ? "−" : ""}${fmtNum(Math.abs(diff), 1)} ${u}). Daily numbers bounce with water and food; the average shows the real direction.`;
+
   return (
-    <ChartFrame
-      title={`${title} (${u})`}
-      height={260}
-      summary={summary}
-      table={{ columns: ["Date", `Weight (${u})`, "7-day avg", "14-day avg"], rows: rows.map((r) => [fmtDay(r.date), r.weight, r.ma7, r.ma14]) }}
-    >
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-          <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="date" tickFormatter={shortDay} tick={{ fontSize: 11, fill: chartColors.muted }} minTickGap={28} />
-          <YAxis domain={padDomain} tick={{ fontSize: 11, fill: chartColors.muted }} width={44} />
-          <Tooltip {...tooltipStyle} labelFormatter={(d) => fmtDay(String(d))} formatter={(v) => `${fmtNum(Number(v), 1)} ${u}`} />
-          <Legend wrapperStyle={{ fontSize: 12 }} />
-          <Line name="Daily weight" type="linear" dataKey="weight" stroke={chartColors.muted} strokeWidth={0} dot={{ r: 2.5, fill: chartColors.muted }} activeDot={{ r: 4 }} isAnimationActive={false} />
-          <Line name="7-day average" type="monotone" dataKey="ma7" stroke={chartColors.brand} strokeWidth={2.5} dot={false} connectNulls isAnimationActive={false} />
-          <Line name="14-day average" type="monotone" dataKey="ma14" stroke={chartColors.series[1]} strokeWidth={2} strokeDasharray="6 4" dot={false} connectNulls isAnimationActive={false} />
-        </ComposedChart>
-      </ResponsiveContainer>
-    </ChartFrame>
+    <div className="space-y-3">
+      <Tile className="!p-5" style={{ background: "linear-gradient(150deg, rgb(var(--brand-a) / 0.14), transparent 65%), rgb(var(--surface))" }}>
+        <p className="eyebrow">Weight · 7-day average</p>
+        <p className="num mt-2 text-[3rem]">
+          <AnimatedNumber value={a} format={(n) => fmtNum(n, 1)} fromZero />
+          <span className="ml-1.5 text-lg font-medium text-muted">{u}</span>
+        </p>
+        <p className="mt-2 flex items-center gap-1.5 text-sm text-muted">
+          <Icon className="h-4 w-4" aria-hidden /> {signed(diff)} {u} across this range. Daily numbers bounce; this is the direction.
+        </p>
+      </Tile>
+
+      <ChartFrame
+        title={`${title} (${u})`}
+        height={252}
+        summary={summary}
+        table={{ columns: ["Date", `Weight (${u})`, "7-day avg", "14-day avg"], rows: rows.map((r) => [fmtDay(r.date), r.weight, r.ma7, r.ma14]) }}
+      >
+        <div className="flex h-full flex-col">
+          <p className="flex items-center gap-4 text-xs text-muted" style={{ height: 28 }}>
+            <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-2 w-2 rounded-full" style={{ background: chartColors.muted, opacity: 0.55 }} /> Daily weigh-in</span>
+            <span className="inline-flex items-center gap-1.5"><span aria-hidden className="h-0.5 w-4 rounded-full" style={{ background: chartColors.brand }} /> 7-day average</span>
+          </p>
+          <ResponsiveContainer width="100%" height={224}>
+            <ComposedChart data={rows} margin={{ top: 16, right: 10, bottom: 0, left: 0 }}>
+              <CartesianGrid stroke={chartColors.grid} strokeWidth={1} vertical={false} />
+              <XAxis dataKey="date" tickFormatter={shortDay} tick={AXIS} tickLine={false} axisLine={{ stroke: chartColors.grid }} minTickGap={32} />
+              <YAxis width={44} domain={padDomain} tick={AXIS} tickLine={false} axisLine={false} tickCount={4} tickFormatter={compactNum} />
+              <Tooltip {...tooltipStyle} cursor={{ stroke: chartColors.muted, strokeWidth: 1 }} labelFormatter={(d) => fmtDay(String(d))} formatter={(v) => `${fmtNum(Number(v), 1)} ${u}`} isAnimationActive={false} />
+              <Line name="Daily weigh-in" type="linear" dataKey="weight" stroke="none" dot={{ r: 2.5, fill: chartColors.muted, fillOpacity: 0.55, stroke: "none" }} activeDot={{ r: 4, fill: chartColors.muted }} isAnimationActive={false} />
+              <Area name="7-day average wash" type="monotone" dataKey="ma7" stroke="none" fill={chartColors.brand} fillOpacity={0.1} connectNulls isAnimationActive={false} tooltipType="none" />
+              <Line name="7-day average" type="monotone" dataKey="ma7" stroke={chartColors.brand} strokeWidth={2} strokeLinecap="round" strokeLinejoin="round" dot={false} activeDot={{ r: 4, fill: chartColors.brand, stroke: chartColors.surface, strokeWidth: 2 }} connectNulls isAnimationActive={false} />
+              {last.ma7 != null && (
+                <ReferenceDot x={last.date} y={last.ma7} r={4} fill={chartColors.brand} stroke={chartColors.surface} strokeWidth={2} ifOverflow="extendDomain" label={{ value: fmtNum(last.ma7, 1), position: "top", fontSize: 11, fill: chartColors.muted }} />
+              )}
+            </ComposedChart>
+          </ResponsiveContainer>
+        </div>
+      </ChartFrame>
+    </div>
   );
 }
 
@@ -61,19 +91,11 @@ export function WaistChart({ waist, units }: { waist: { date: string; waistCm: n
   return (
     <ChartFrame
       title={`${title} (${unit})`}
-      height={220}
+      height={224}
       summary={`${rows.length} measurements. Waist went from ${fmtNum(first.waist, 1)} to ${fmtNum(last.waist, 1)} ${unit} (${diff > 0 ? "+" : diff < 0 ? "−" : ""}${fmtNum(Math.abs(diff), 1)} ${unit}). Tape measurements vary by a centimetre or so, so look for the overall direction.`}
       table={{ columns: ["Date", `Waist (${unit})`], rows: rows.map((r) => [fmtDay(r.date), r.waist]) }}
     >
-      <ResponsiveContainer width="100%" height="100%">
-        <ComposedChart data={rows} margin={{ top: 8, right: 8, bottom: 0, left: -12 }}>
-          <CartesianGrid stroke={chartColors.grid} strokeDasharray="3 3" vertical={false} />
-          <XAxis dataKey="date" tickFormatter={shortDay} tick={{ fontSize: 11, fill: chartColors.muted }} minTickGap={28} />
-          <YAxis domain={padDomain} tick={{ fontSize: 11, fill: chartColors.muted }} width={44} />
-          <Tooltip {...tooltipStyle} labelFormatter={(d) => fmtDay(String(d))} formatter={(v) => `${fmtNum(Number(v), 1)} ${unit}`} />
-          <Line name="Waist" type="monotone" dataKey="waist" stroke={chartColors.series[3]} strokeWidth={2.5} dot={{ r: 3 }} isAnimationActive={false} />
-        </ComposedChart>
-      </ResponsiveContainer>
+      <SingleLine rows={rows} dataKey="waist" color={chartColors.brand} unit={unit} dots height={216} />
     </ChartFrame>
   );
 }

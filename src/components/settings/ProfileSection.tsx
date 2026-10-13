@@ -1,8 +1,9 @@
 "use client";
-import { useMemo, useState } from "react";
-import { Field, Segmented } from "@/components/ui";
+import { Activity, Cake, Globe, Ruler, User, UserRound } from "lucide-react";
+import { useCallback, useEffect, useMemo, useState } from "react";
+import { Field, Segmented, Sheet } from "@/components/ui";
 import type { UnitSystem } from "@/lib/client/format";
-import { NumberField, SaveStatus, SectionCard, inRange, num, useSaver } from "./common";
+import { Group, GroupBody, NumberField, Row, SaveStatus, inRange, num, useSaver } from "./common";
 import type { ProfilePatch, ProfileResponse } from "./types";
 import type { ApiState } from "@/lib/client/api";
 
@@ -33,12 +34,14 @@ const cmToFtIn = (cm: number) => {
   return { ft: String(ft), inch: String(inch) };
 };
 
-export function ProfileSection({ api, data }: { api: ApiState<ProfileResponse>; data: ProfileResponse }) {
+export function ProfileSection({ api, data, index = 0 }: { api: ApiState<ProfileResponse>; data: ProfileResponse; index?: number }) {
   const { profile } = data;
   const saver = useSaver(api);
   const units = profile.unitSystem;
   const zones = useMemo(() => timeZones(profile.timezone), [profile.timezone]);
 
+  const [open, setOpen] = useState(false);
+  const [focusId, setFocusId] = useState<string | null>(null);
   const [name, setName] = useState(data.user?.name ?? "");
   const [sex, setSex] = useState<string>(profile.sex ?? "");
   const [birthYear, setBirthYear] = useState(profile.birthYear != null ? String(profile.birthYear) : "");
@@ -50,6 +53,25 @@ export function ProfileSection({ api, data }: { api: ApiState<ProfileResponse>; 
   const [errors, setErrors] = useState<Record<string, string | null>>({});
 
   const maxYear = new Date().getFullYear() - 13;
+
+  // Opening the sheet always starts from what is saved, so a cancelled edit never lingers.
+  const openSheet = (field: string) => {
+    setName(data.user?.name ?? "");
+    setSex(profile.sex ?? "");
+    setBirthYear(profile.birthYear != null ? String(profile.birthYear) : "");
+    setCm(profile.heightCm != null ? String(Math.round(profile.heightCm * 10) / 10) : "");
+    setFt(profile.heightCm != null ? cmToFtIn(profile.heightCm).ft : "");
+    setInch(profile.heightCm != null ? cmToFtIn(profile.heightCm).inch : "");
+    setTz(profile.timezone);
+    setActivity(nearestActivity(profile.activityLevel));
+    setErrors({});
+    setFocusId(field);
+    setOpen(true);
+  };
+  const close = useCallback(() => setOpen(false), []);
+  useEffect(() => {
+    if (open && focusId) document.getElementById(focusId)?.focus();
+  }, [open, focusId]);
 
   const submit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -72,7 +94,8 @@ export function ProfileSection({ api, data }: { api: ApiState<ProfileResponse>; 
 
     setErrors(errs);
     if (Object.values(errs).some(Boolean)) return;
-    await saver.save(body);
+    const saved = await saver.save(body);
+    if (saved) setOpen(false);
   };
 
   const changeUnits = (u: UnitSystem) => {
@@ -80,16 +103,34 @@ export function ProfileSection({ api, data }: { api: ApiState<ProfileResponse>; 
     void saver.save({ unitSystem: u }, (p) => ({ ...p, profile: { ...p.profile, unitSystem: u } }));
   };
 
-  return (
-    <SectionCard id="profile-h" title="Profile" description="Used for your starting estimates and the minimum safe calorie level.">
-      <div>
-        <p className="label">Show weights and heights in</p>
-        <Segmented<UnitSystem> label="Units" value={units} onChange={changeUnits} options={[{ value: "METRIC", label: "Metric (kg, cm)" }, { value: "IMPERIAL", label: "Imperial (lb, ft)" }]} />
-      </div>
+  const savedHeight = profile.heightCm == null ? "Not set" : units === "METRIC" ? `${Math.round(profile.heightCm * 10) / 10} cm` : `${cmToFtIn(profile.heightCm).ft} ft ${cmToFtIn(profile.heightCm).inch} in`;
+  const savedActivity = ACTIVITY_LEVELS.find((o) => o.value === nearestActivity(profile.activityLevel))?.label.split(" (")[0];
 
-      {/* Remount when units change so the height fields re-derive from the saved value. */}
-      <form key={units} onSubmit={submit} className="space-y-4" noValidate>
-        <div className="grid gap-4 sm:grid-cols-2">
+  return (
+    <div>
+    <Group
+      id="profile-h" title="Profile" index={index}
+      description="Used for your starting estimates and the minimum safe calorie level."
+      status={!open ? <SaveStatus saver={saver} /> : undefined}
+    >
+      <GroupBody className="py-3">
+        <p className="label">Show weights and heights in</p>
+        <div className="[&>div]:grid [&>div]:w-full">
+          <Segmented<UnitSystem> label="Units" value={units} onChange={changeUnits} options={[{ value: "METRIC", label: "Metric (kg, cm)" }, { value: "IMPERIAL", label: "Imperial (lb, ft)" }]} />
+        </div>
+      </GroupBody>
+      <Row icon={User} tint="brand" label="First name" value={data.user?.name || "Not set"} onClick={() => openSheet("set-name")} opens />
+      <Row icon={UserRound} tint="protein" label="Sex" value={profile.sex === "FEMALE" ? "Female" : profile.sex === "MALE" ? "Male" : "Not set"} onClick={() => openSheet("set-sex")} opens />
+      <Row icon={Cake} tint="cal" label="Birth year" value={profile.birthYear ?? "Not set"} onClick={() => openSheet("set-by")} opens />
+      <Row icon={Ruler} tint="steps" label="Height" value={savedHeight} onClick={() => openSheet(units === "METRIC" ? "set-cm" : "set-ft")} opens />
+      <Row icon={Globe} tint="sleep" label="Time zone" value={profile.timezone} onClick={() => openSheet("set-tz")} opens />
+      <Row icon={Activity} tint="fiber" label="Typical daily activity" value={savedActivity} onClick={() => openSheet("set-act")} opens />
+
+    </Group>
+
+      <Sheet open={open} onClose={close} title="Edit profile">
+        {/* Remount when units change so the height fields re-derive from the saved value. */}
+        <form key={units} onSubmit={submit} className="space-y-4" noValidate>
           <Field label="First name" htmlFor="set-name"><input id="set-name" className="input" autoComplete="given-name" maxLength={60} value={name} onChange={(e) => setName(e.target.value)} /></Field>
           <Field label="Sex" htmlFor="set-sex" hint="Used for the calorie floor and the energy formulas.">
             <select id="set-sex" className="input" value={sex} onChange={(e) => setSex(e.target.value)}>
@@ -120,12 +161,12 @@ export function ProfileSection({ api, data }: { api: ApiState<ProfileResponse>; 
               {ACTIVITY_LEVELS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
             </select>
           </Field>
-        </div>
-        <div className="flex flex-wrap items-center gap-3">
-          <button className="btn btn-primary" disabled={saver.state === "saving"}>Save profile</button>
-          <SaveStatus saver={saver} />
-        </div>
-      </form>
-    </SectionCard>
+          <div className="space-y-2 pt-1">
+            <button className="btn btn-primary w-full !min-h-[52px] !text-base" disabled={saver.state === "saving"}>Save profile</button>
+            <SaveStatus saver={saver} />
+          </div>
+        </form>
+      </Sheet>
+    </div>
   );
 }

@@ -1,4 +1,4 @@
-# FitTrack AI
+# SukoonFit
 
 A voice-first AI fitness coach. Talk (or type) naturally — "I weighed 84.5, had five egg whites for breakfast, and I want to stay under 2,000 calories" — and the app logs each piece, estimates with **honest uncertainty**, and coaches adaptively.
 
@@ -88,7 +88,7 @@ src/app/(app)/              Today, Dashboard, Nutrition, Weight, Workouts (+sess
 ## Database: migrations and row-level security
 
 - `prisma/migrations/` holds committed migrations (`20261013000000_init` = the schema as first deployed, then `20261014000000_progress_photos`). On a fresh database run `npm run db:deploy`. **Updating a live site? Follow [DEPLOY.md](DEPLOY.md)**: an existing database must be baselined first, or `migrate deploy` stops with P3005.
-- **Supabase:** every table in `public` is also reachable through Supabase's REST API by default. FitTrack never uses that API for data, so run `npm run db:rls` once: it enables RLS on all tables with no policies, which blocks the public `anon`/`authenticated` roles entirely. The app is unaffected because Prisma connects as the table owner, which bypasses RLS.
+- **Supabase:** every table in `public` is also reachable through Supabase's REST API by default. SukoonFit never uses that API for data, so run `npm run db:rls` once: it enables RLS on all tables with no policies, which blocks the public `anon`/`authenticated` roles entirely. The app is unaffected because Prisma connects as the table owner, which bypasses RLS.
 - Keep the service-role key (`SUPABASE_SERVICE_ROLE_KEY`) server-only. It bypasses RLS.
 
 ## Notes & known limits

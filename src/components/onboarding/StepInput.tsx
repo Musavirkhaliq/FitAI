@@ -1,7 +1,7 @@
 "use client";
-import { ArrowRight } from "lucide-react";
-import { useId, useRef, type ReactNode } from "react";
-import { clsx } from "@/components/ui";
+import { AlertCircle, ArrowRight, Check } from "lucide-react";
+import { useId, useRef, type CSSProperties, type ReactNode } from "react";
+import { clsx, haptic } from "@/components/ui";
 import { DictateButton } from "./DictateButton";
 import { fromSpeech } from "./speech";
 import {
@@ -20,21 +20,31 @@ interface Props {
   last: boolean;
 }
 
+/** Big, tap-friendly option cards. Tapping one answers and moves on. */
 function ChoiceList<T extends string>({ options, value, onPick, labelId }: { options: Option<T>[]; value: T | null; onPick: (v: T) => void; labelId: string }) {
   return (
     <div role="radiogroup" aria-labelledby={labelId} className="grid gap-2">
-      {options.map((o) => (
-        <button
-          key={o.value} type="button" role="radio" aria-checked={value === o.value} onClick={() => onPick(o.value)}
-          className={clsx(
-            "min-h-[56px] w-full rounded-xl border px-4 py-3 text-left transition-colors",
-            value === o.value ? "border-brand bg-brand/10" : "border-border bg-surface hover:bg-surface-2",
-          )}
-        >
-          <span className="block font-medium">{o.label}</span>
-          {o.description && <span className="block text-sm text-muted">{o.description}</span>}
-        </button>
-      ))}
+      {options.map((o, i) => {
+        const on = value === o.value;
+        return (
+          <button
+            key={o.value} type="button" role="radio" aria-checked={on} onClick={() => { haptic(); onPick(o.value); }}
+            style={{ ["--i" as string]: i } as CSSProperties}
+            className={clsx(
+              "press rise flex min-h-[64px] w-full items-center gap-3 rounded-2xl border px-4 py-3 text-left transition-colors",
+              on ? "border-brand bg-brand/10" : "border-border bg-surface hover:bg-surface-2",
+            )}
+          >
+            <span className="min-w-0 flex-1">
+              <span className="block text-[1.02rem] font-semibold leading-snug">{o.label}</span>
+              {o.description && <span className="mt-0.5 block text-sm leading-snug text-muted">{o.description}</span>}
+            </span>
+            <span aria-hidden className={clsx("flex h-6 w-6 shrink-0 items-center justify-center rounded-full border-2 transition-colors", on ? "grad-brand border-transparent text-brand-fg" : "border-border")}>
+              {on && <Check className="h-3.5 w-3.5" strokeWidth={3} />}
+            </span>
+          </button>
+        );
+      })}
     </div>
   );
 }
@@ -42,29 +52,34 @@ function ChoiceList<T extends string>({ options, value, onPick, labelId }: { opt
 function Chips({ values, current, onPick, format, labelId }: { values: number[]; current: string | number; onPick: (v: number) => void; format: (n: number) => string; labelId: string }) {
   return (
     <div role="radiogroup" aria-labelledby={labelId} className="flex flex-wrap gap-2">
-      {values.map((v) => (
-        <button
-          key={v} type="button" role="radio" aria-checked={String(current) === String(v)} onClick={() => onPick(v)}
-          className={clsx(
-            "min-h-[44px] min-w-[56px] rounded-full border px-4 text-sm font-medium transition-colors",
-            String(current) === String(v) ? "border-brand bg-brand/15 text-brand" : "border-border bg-surface hover:bg-surface-2",
-          )}
-        >
-          {format(v)}
-        </button>
-      ))}
+      {values.map((v) => {
+        const on = String(current) === String(v);
+        return (
+          <button
+            key={v} type="button" role="radio" aria-checked={on} onClick={() => { haptic(); onPick(v); }}
+            className={clsx(
+              "press min-h-[48px] min-w-[64px] rounded-full border px-5 text-[0.95rem] font-semibold transition-colors",
+              on ? "border-brand bg-brand/12 text-brand" : "border-border bg-surface hover:bg-surface-2",
+            )}
+          >
+            {format(v)}
+          </button>
+        );
+      })}
     </div>
   );
 }
 
 function Suffix({ children, unit }: { children: ReactNode; unit: string }) {
   return (
-    <div className="flex items-center gap-2">
+    <div className="flex min-w-0 flex-1 items-center gap-2">
       <div className="min-w-0 flex-1">{children}</div>
       <span className="shrink-0 text-sm font-medium text-muted">{unit}</span>
     </div>
   );
 }
+
+const BIG = "input !min-h-[52px] text-lg";
 
 export function StepInput({ id, answers: a, set, submit, error, labelId, last }: Props) {
   const errId = useId();
@@ -81,13 +96,15 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
   );
 
   const next = (opts: { skip?: { label: string; patch: Partial<Answers> }; disabled?: boolean } = {}) => (
-    <div className="mt-4 flex flex-wrap items-center gap-2">
-      <button type="submit" className="btn btn-primary min-w-[120px]" disabled={opts.disabled}>
+    <div className="mt-3 flex items-center gap-2">
+      {opts.skip && <button type="button" className="btn btn-ghost shrink-0" onClick={() => submit(opts.skip!.patch)}>{opts.skip.label}</button>}
+      <button type="submit" className="btn btn-primary min-w-0 flex-1 !min-h-[52px] !text-base" disabled={opts.disabled}>
         {nextLabel} <ArrowRight className="h-4 w-4" aria-hidden />
       </button>
-      {opts.skip && <button type="button" className="btn btn-ghost" onClick={() => submit(opts.skip!.patch)}>{opts.skip.label}</button>}
     </div>
   );
+
+  const row = "flex flex-wrap items-center gap-x-2";
 
   let body: ReactNode;
   switch (id) {
@@ -112,8 +129,10 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
     case "name":
       body = (
         <>
-          <input {...common} className="input !min-h-[52px] text-lg" autoComplete="given-name" maxLength={80} value={a.name} onChange={(e) => set({ name: e.target.value })} />
-          {voice()}
+          <div className={row}>
+            <input {...common} className={clsx(BIG, "min-w-0 flex-1")} autoComplete="given-name" maxLength={80} value={a.name} onChange={(e) => set({ name: e.target.value })} />
+            {voice()}
+          </div>
           {next({ skip: { label: "Skip", patch: { name: "" } } })}
         </>
       );
@@ -121,8 +140,10 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
     case "birthYear":
       body = (
         <>
-          <input {...common} className="input !min-h-[52px] text-lg" inputMode="numeric" autoComplete="bday-year" maxLength={4} placeholder="YYYY" value={a.birthYear} onChange={(e) => set({ birthYear: e.target.value })} />
-          {voice()}
+          <div className={row}>
+            <input {...common} className={clsx(BIG, "min-w-0 flex-1")} inputMode="numeric" autoComplete="bday-year" maxLength={4} placeholder="YYYY" value={a.birthYear} onChange={(e) => set({ birthYear: e.target.value })} />
+            {voice()}
+          </div>
           {next()}
         </>
       );
@@ -130,17 +151,21 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
     case "height":
       body = a.unitSystem === "IMPERIAL" ? (
         <>
-          <div className="flex items-center gap-2" role="group" aria-labelledby={labelId}>
-            <Suffix unit="ft"><input aria-label="Feet" className="input !min-h-[52px] text-lg" inputMode="numeric" value={a.heightFt} onChange={(e) => set({ heightFt: e.target.value })} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} /></Suffix>
-            <Suffix unit="in"><input aria-label="Inches" className="input !min-h-[52px] text-lg" inputMode="decimal" value={a.heightIn} onChange={(e) => set({ heightIn: e.target.value })} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} /></Suffix>
+          <div className={row} role="group" aria-labelledby={labelId}>
+            <div className="flex min-w-0 flex-1 items-center gap-2">
+              <Suffix unit="ft"><input aria-label="Feet" className={BIG} inputMode="numeric" value={a.heightFt} onChange={(e) => set({ heightFt: e.target.value })} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} /></Suffix>
+              <Suffix unit="in"><input aria-label="Inches" className={BIG} inputMode="decimal" value={a.heightIn} onChange={(e) => set({ heightIn: e.target.value })} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} /></Suffix>
+            </div>
+            {voice()}
           </div>
-          {voice()}
           {next()}
         </>
       ) : (
         <>
-          <Suffix unit="cm"><input {...common} className="input !min-h-[52px] text-lg" inputMode="decimal" value={a.heightCm} onChange={(e) => set({ heightCm: e.target.value })} /></Suffix>
-          {voice()}
+          <div className={row}>
+            <Suffix unit="cm"><input {...common} className={BIG} inputMode="decimal" value={a.heightCm} onChange={(e) => set({ heightCm: e.target.value })} /></Suffix>
+            {voice()}
+          </div>
           {next()}
         </>
       );
@@ -148,8 +173,10 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
     case "weight":
       body = (
         <>
-          <Suffix unit={weightUnit(a.unitSystem)}><input {...common} className="input !min-h-[52px] text-lg" inputMode="decimal" value={a.weight} onChange={(e) => set({ weight: e.target.value })} /></Suffix>
-          {voice()}
+          <div className={row}>
+            <Suffix unit={weightUnit(a.unitSystem)}><input {...common} className={BIG} inputMode="decimal" value={a.weight} onChange={(e) => set({ weight: e.target.value })} /></Suffix>
+            {voice()}
+          </div>
           {next()}
         </>
       );
@@ -157,8 +184,10 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
     case "targetWeight":
       body = (
         <>
-          <Suffix unit={weightUnit(a.unitSystem)}><input {...common} className="input !min-h-[52px] text-lg" inputMode="decimal" value={a.targetWeight} onChange={(e) => set({ targetWeight: e.target.value })} /></Suffix>
-          {voice()}
+          <div className={row}>
+            <Suffix unit={weightUnit(a.unitSystem)}><input {...common} className={BIG} inputMode="decimal" value={a.targetWeight} onChange={(e) => set({ targetWeight: e.target.value })} /></Suffix>
+            {voice()}
+          </div>
           {next({ skip: { label: "Skip, no target", patch: { targetWeight: "" } } })}
         </>
       );
@@ -175,10 +204,10 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
       body = (
         <>
           <Chips values={SESSION_CHOICES} current={a.sessionMinutes} labelId={labelId} format={(n) => `${n} min`} onPick={(n) => submit({ sessionMinutes: String(n) })} />
-          <div className="mt-3 max-w-[200px]">
+          <div className={clsx(row, "mt-3")}>
             <Suffix unit="minutes"><input aria-label="Or type your own, in minutes" className="input" inputMode="numeric" value={a.sessionMinutes} onChange={(e) => set({ sessionMinutes: e.target.value })} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} /></Suffix>
+            {voice()}
           </div>
-          {voice()}
           {next()}
         </>
       );
@@ -186,8 +215,10 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
     case "injuries":
       body = (
         <>
-          <textarea {...common} className="input min-h-[96px] py-2" rows={3} maxLength={300} value={a.injuries} onChange={(e) => set({ injuries: e.target.value })} />
-          {voice(a.injuries)}
+          <div className={row}>
+            <textarea {...common} className="input min-h-[96px] min-w-0 flex-1 py-3" rows={3} maxLength={300} value={a.injuries} onChange={(e) => set({ injuries: e.target.value })} />
+            {voice(a.injuries)}
+          </div>
           {next({ skip: { label: "None", patch: { injuries: "" } } })}
         </>
       );
@@ -201,14 +232,16 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
       };
       body = (
         <>
-          <input {...common} className="input !min-h-[52px] text-lg" placeholder="Separate with commas" value={a.foods} onChange={(e) => set({ foods: e.target.value })} />
-          {voice(a.foods)}
+          <div className={row}>
+            <input {...common} className={clsx(BIG, "min-w-0 flex-1")} placeholder="Separate with commas" value={a.foods} onChange={(e) => set({ foods: e.target.value })} />
+            {voice(a.foods)}
+          </div>
           <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Common examples">
             {FOOD_EXAMPLES.map((f) => {
               const on = current.includes(f.toLowerCase());
               return (
-                <button key={f} type="button" aria-pressed={on} onClick={() => toggle(f)}
-                  className={clsx("min-h-[44px] rounded-full border px-4 text-sm font-medium transition-colors", on ? "border-brand bg-brand/15 text-brand" : "border-border bg-surface hover:bg-surface-2")}>
+                <button key={f} type="button" aria-pressed={on} onClick={() => { haptic(); toggle(f); }}
+                  className={clsx("press min-h-[44px] rounded-full border px-4 text-sm font-semibold transition-colors", on ? "border-brand bg-brand/12 text-brand" : "border-border bg-surface hover:bg-surface-2")}>
                   {f}
                 </button>
               );
@@ -232,7 +265,12 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
   return (
     <form onSubmit={(e) => { e.preventDefault(); submit(); }} noValidate>
       {body}
-      {error && <p id={errId} role="alert" className="mt-3 text-sm text-bad">{error}</p>}
+      {error && (
+        <p id={errId} role="alert" className="pop mt-3 flex items-start gap-2 rounded-2xl border border-bad/30 bg-bad/10 px-3.5 py-2.5 text-sm">
+          <AlertCircle className="mt-0.5 h-4 w-4 shrink-0 text-bad" aria-hidden />
+          <span>{error}</span>
+        </p>
+      )}
     </form>
   );
 }

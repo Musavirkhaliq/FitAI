@@ -1,5 +1,5 @@
 "use client";
-import { Download } from "lucide-react";
+import { Download, FileDown } from "lucide-react";
 import { useState } from "react";
 import { clsx, Field, Segmented } from "@/components/ui";
 
@@ -14,7 +14,7 @@ const TYPES = [
 type Format = "csv" | "xlsx" | "pdf";
 
 /** Downloads are plain links: the server sets Content-Disposition, so the browser saves the file without leaving the page. */
-export function ExportPanel() {
+export function ExportPanel({ index = 0 }: { index?: number }) {
   const [type, setType] = useState<(typeof TYPES)[number]["value"]>("nutrition");
   const [format, setFormat] = useState<Format>("csv");
   const [from, setFrom] = useState("");
@@ -26,30 +26,42 @@ export function ExportPanel() {
   if (to) qs.set("to", to);
 
   return (
-    <section className="card space-y-3" aria-labelledby="export-h">
-      <h2 id="export-h" className="text-sm font-semibold">Export your data</h2>
-      <div className="grid gap-3 sm:grid-cols-2">
+    <section className="card rise space-y-4" aria-labelledby="export-h" style={{ ["--i" as string]: index }}>
+      <div className="flex items-center gap-3">
+        <span aria-hidden className="flex h-11 w-11 shrink-0 items-center justify-center rounded-2xl bg-surface-2 text-muted"><FileDown className="h-5 w-5" /></span>
+        <div className="min-w-0">
+          <h2 id="export-h" className="display text-lg font-extrabold leading-tight">Export your data</h2>
+          <p className="text-xs text-muted">Yours to keep. Leave the dates empty for everything.</p>
+        </div>
+      </div>
+
+      <div className="space-y-3 rounded-2xl bg-surface-2 p-3.5">
         <Field label="What to export" htmlFor="ex-type">
-          <select id="ex-type" className="input" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
+          <select id="ex-type" className="input !bg-surface" value={type} onChange={(e) => setType(e.target.value as typeof type)}>
             {TYPES.map((t) => <option key={t.value} value={t.value}>{t.label}</option>)}
           </select>
         </Field>
         <div>
           <p className="label">Format</p>
-          <Segmented<Format> label="Export format" value={format} onChange={setFormat} options={[{ value: "csv", label: "CSV" }, { value: "xlsx", label: "Excel" }, { value: "pdf", label: "PDF" }]} />
+          <div className="[&>div]:grid [&>div]:w-full [&>div]:!bg-surface">
+            <Segmented<Format> label="Export format" value={format} onChange={setFormat} options={[{ value: "csv", label: "CSV" }, { value: "xlsx", label: "Excel" }, { value: "pdf", label: "PDF" }]} />
+          </div>
         </div>
-        <Field label="From (optional)" htmlFor="ex-from">
-          <input id="ex-from" type="date" className="input" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
-        </Field>
-        <Field label="To (optional)" htmlFor="ex-to">
-          <input id="ex-to" type="date" className="input" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
-        </Field>
+        <div className="grid grid-cols-2 gap-3">
+          <Field label="From (optional)" htmlFor="ex-from">
+            <input id="ex-from" type="date" className="input !bg-surface" value={from} max={to || undefined} onChange={(e) => setFrom(e.target.value)} />
+          </Field>
+          <Field label="To (optional)" htmlFor="ex-to">
+            <input id="ex-to" type="date" className="input !bg-surface" value={to} min={from || undefined} onChange={(e) => setTo(e.target.value)} />
+          </Field>
+        </div>
       </div>
+
       {badRange && <p role="alert" className="text-sm text-bad">The start date needs to be on or before the end date.</p>}
-      <a href={badRange ? undefined : `/api/export?${qs.toString()}`} aria-disabled={badRange} className={clsx("btn btn-primary", badRange && "pointer-events-none opacity-50")}>
+      <a href={badRange ? undefined : `/api/export?${qs.toString()}`} aria-disabled={badRange} className={clsx("btn btn-primary w-full", badRange && "pointer-events-none opacity-50")}>
         <Download className="h-4 w-4" aria-hidden /> Download {format.toUpperCase()}
       </a>
-      <p className="text-xs text-muted">Calories and body-fat figures in exports are estimates, not measurements. Leave the dates empty to export everything.</p>
+      <p className="text-xs text-muted">Calories and body-fat figures in exports are estimates, not measurements.</p>
     </section>
   );
 }

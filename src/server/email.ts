@@ -59,7 +59,7 @@ export async function sendEmail({
   const port = process.env.SMTP_PORT ? parseInt(process.env.SMTP_PORT, 10) : 587;
   const user = process.env.SMTP_USER;
   const pass = process.env.SMTP_PASS;
-  const from = process.env.EMAIL_FROM || "FitTrack AI <noreply@fittrack.ai>";
+  const from = process.env.EMAIL_FROM || "SukoonFit <noreply@example.com>";
 
   if (host && user && pass) {
     try {

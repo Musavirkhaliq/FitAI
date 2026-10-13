@@ -1,12 +1,13 @@
 "use client";
+import { Bell } from "lucide-react";
 import { useEffect, useState } from "react";
 import { useCoach } from "@/components/coach/CoachProvider";
 import { Toggle } from "@/components/ui";
 import type { ApiState } from "@/lib/client/api";
-import { SaveStatus, SectionCard, useSaver } from "./common";
+import { Group, GroupBody, IconTile, SaveStatus, useSaver } from "./common";
 import type { ProfileResponse, ReminderKey } from "./types";
 
-export function VoiceSection({ api, data }: { api: ApiState<ProfileResponse>; data: ProfileResponse }) {
+export function VoiceSection({ api, data, index = 0 }: { api: ApiState<ProfileResponse>; data: ProfileResponse; index?: number }) {
   const saver = useSaver(api);
   const { setTtsOn } = useCoach();
   const on = data.profile.ttsEnabled;
@@ -18,10 +19,11 @@ export function VoiceSection({ api, data }: { api: ApiState<ProfileResponse>; da
   };
 
   return (
-    <SectionCard id="voice-h" title="Voice">
-      <Toggle label="Read replies aloud" checked={on} onChange={change} description="Your coach speaks its answers. You can always read them on screen, and you can interrupt at any time." />
-      <SaveStatus saver={saver} />
-    </SectionCard>
+    <Group id="voice-h" title="Voice" index={index} status={<SaveStatus saver={saver} />}>
+      <GroupBody>
+        <Toggle label="Read replies aloud" checked={on} onChange={change} description="Your coach speaks its answers. You can always read them on screen, and you can interrupt at any time." />
+      </GroupBody>
+    </Group>
   );
 }
 
@@ -36,7 +38,7 @@ const REMINDERS: { key: ReminderKey; label: string; description: string }[] = [
 
 type Permission = NotificationPermission | "unsupported";
 
-export function RemindersSection({ api, data }: { api: ApiState<ProfileResponse>; data: ProfileResponse }) {
+export function RemindersSection({ api, data, index = 0 }: { api: ApiState<ProfileResponse>; data: ProfileResponse; index?: number }) {
   const saver = useSaver(api);
   const [permission, setPermission] = useState<Permission>("default");
   const [permError, setPermError] = useState<string | null>(null);
@@ -56,31 +58,39 @@ export function RemindersSection({ api, data }: { api: ApiState<ProfileResponse>
   };
 
   return (
-    <SectionCard id="rem-h" title="Reminders" description="Reminders appear inside the app. Each one can be switched off on its own, and none of them is required.">
-      <div className="divide-y divide-border">
-        {REMINDERS.map((r) => {
-          const on = reminders[r.key] ?? true;
-          return (
+    <Group
+      id="rem-h" title="Reminders" index={index}
+      description="Reminders appear inside the app. Each one can be switched off on its own, and none of them is required."
+      status={<SaveStatus saver={saver} />}
+    >
+      {REMINDERS.map((r) => {
+        const on = reminders[r.key] ?? true;
+        return (
+          <GroupBody key={r.key}>
             <Toggle
-              key={r.key} label={r.label} description={r.description} checked={on}
+              label={r.label} description={r.description} checked={on}
               onChange={(v) => void saver.save({ reminders: { [r.key]: v } }, (p) => ({ ...p, profile: { ...p.profile, reminders: { ...p.profile.reminders, [r.key]: v } } }))}
             />
-          );
-        })}
-      </div>
-      <SaveStatus saver={saver} />
+          </GroupBody>
+        );
+      })}
 
-      <div className="rounded-xl border border-border bg-surface-2/60 p-3">
-        <p className="font-medium">Browser notifications (optional)</p>
-        <p className="mt-1 text-sm text-muted">If you allow them, reminders can also pop up outside the app while it&apos;s open in your browser. Skip this if you prefer to see reminders in the app only.</p>
-        <div aria-live="polite" className="mt-2 text-sm">
-          {permission === "granted" && <p className="text-good">Browser notifications are on.</p>}
-          {permission === "denied" && <p className="text-muted">Notifications are blocked. To change that, open your browser&apos;s site settings for this page and allow notifications.</p>}
-          {permission === "unsupported" && <p className="text-muted">This browser doesn&apos;t support notifications. Reminders will still show inside the app.</p>}
-          {permError && <p role="alert" className="text-bad">{permError}</p>}
+      <GroupBody className="py-3">
+        <div className="flex items-start gap-3">
+          <IconTile icon={Bell} tint="sleep" />
+          <div className="min-w-0 flex-1">
+            <p className="font-medium">Browser notifications (optional)</p>
+            <p className="mt-1 text-sm text-muted">If you allow them, reminders can also pop up outside the app while it&apos;s open in your browser. Skip this if you prefer to see reminders in the app only.</p>
+            <div aria-live="polite" className="mt-2 text-sm">
+              {permission === "granted" && <p className="text-good">Browser notifications are on.</p>}
+              {permission === "denied" && <p className="text-muted">Notifications are blocked. To change that, open your browser&apos;s site settings for this page and allow notifications.</p>}
+              {permission === "unsupported" && <p className="text-muted">This browser doesn&apos;t support notifications. Reminders will still show inside the app.</p>}
+              {permError && <p role="alert" className="text-bad">{permError}</p>}
+            </div>
+            {permission === "default" && <button type="button" className="btn mt-2" onClick={() => void askPermission()}>Allow browser notifications</button>}
+          </div>
         </div>
-        {permission === "default" && <button type="button" className="btn mt-2" onClick={() => void askPermission()}>Allow browser notifications</button>}
-      </div>
-    </SectionCard>
+      </GroupBody>
+    </Group>
   );
 }

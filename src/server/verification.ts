@@ -28,12 +28,12 @@ export async function sendVerificationToken(email: string, baseUrl?: string): Pr
   const appUrl = (baseUrl || process.env.NEXTAUTH_URL || process.env.APP_URL || "http://localhost:3000").replace(/\/$/, "");
   const verifyLink = `${appUrl}/verify-email?token=${token}&email=${encodeURIComponent(normEmail)}`;
 
-  const subject = "Verify your email for FitTrack AI";
-  const text = `Welcome to FitTrack AI!\n\nPlease verify your email address by visiting the following link:\n${verifyLink}\n\nThis link will expire in 24 hours.\nIf you did not request this, please ignore this email.`;
+  const subject = "Verify your email for SukoonFit";
+  const text = `Welcome to SukoonFit!\n\nPlease verify your email address by visiting the following link:\n${verifyLink}\n\nThis link will expire in 24 hours.\nIf you did not request this, please ignore this email.`;
   const html = `
     <div style="font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif; max-width: 540px; margin: 0 auto; padding: 24px; border: 1px solid #e2e8f0; border-radius: 12px; background: #ffffff;">
       <h2 style="color: #0f172a; margin-top: 0;">Verify your email address</h2>
-      <p style="color: #475569; font-size: 15px; line-height: 1.5;">Welcome to FitTrack AI! Click the button below to verify your email and activate your account.</p>
+      <p style="color: #475569; font-size: 15px; line-height: 1.5;">Welcome to SukoonFit! Click the button below to verify your email and activate your account.</p>
       <div style="margin: 28px 0;">
         <a href="${verifyLink}" style="background-color: #0284c7; color: #ffffff; padding: 12px 24px; border-radius: 8px; text-decoration: none; font-weight: 600; display: inline-block;">
           Verify Email Address

@@ -1,10 +1,10 @@
 {
-  "name": "FitTrack AI",
-  "short_name": "FitTrack",
-  "description": "Voice-first AI fitness coach",
+  "name": "SukoonFit",
+  "short_name": "SukoonFit",
+  "description": "A calm, voice-first AI fitness coach",
   "start_url": "/",
   "display": "standalone",
-  "background_color": "#0b1013",
+  "background_color": "#080c0f",
   "theme_color": "#047857",
   "icons": [{ "src": "/icons/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "any maskable" }]
 }

@@ -1,5 +1,5 @@
 "use client";
-import { Activity, ArrowLeft, Sparkles } from "lucide-react";
+import { ArrowLeft, ArrowRight, Sparkles } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { Fragment, useCallback, useEffect, useRef, useState, type ReactNode } from "react";
@@ -11,29 +11,59 @@ import {
 } from "@/components/onboarding/model";
 import type { ProfileResponse } from "@/components/settings/types";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { ErrorState, LoadingBlock, Notice, ProgressBar, Spinner } from "@/components/ui";
+import { ErrorState, LoadingBlock, Notice, Skeleton, Spinner, haptic } from "@/components/ui";
 import { ApiError, notifyChanged, patch, post, useApi } from "@/lib/client/api";
 
 type Phase = "chat" | "plan";
 const LAST = STEPS.length - 1;
 const QUESTION_ID = "onb-question";
+const TYPING_MS = 400;
+
+const prefersReduce = () => typeof window !== "undefined" && !!window.matchMedia?.("(prefers-reduced-motion: reduce)").matches;
+
+/** The coach's avatar: a small brand orb with a glossy highlight. Decorative. */
+function Avatar() {
+  return (
+    <span aria-hidden className="grad-brand relative mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-full text-brand-fg" style={{ boxShadow: "var(--shadow-tile), var(--glow)" }}>
+      <span className="pointer-events-none absolute inset-0 rounded-full" style={{ background: "radial-gradient(120% 90% at 30% 15%, rgb(255 255 255 / 0.5), transparent 55%)" }} />
+      <Sparkles className="relative h-4 w-4" />
+    </span>
+  );
+}
 
 function AssistantBubble({ children, id }: { children: ReactNode; id?: string }) {
   return (
-    <div className="flex items-start gap-2">
-      <span className="mt-1 flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-brand/15 text-brand" aria-hidden><Sparkles className="h-4 w-4" /></span>
-      <div id={id} className="max-w-[88%] rounded-2xl rounded-tl-md border border-border bg-surface px-4 py-3 shadow-sm">{children}</div>
+    <div className="rise flex items-start gap-2.5">
+      <Avatar />
+      <div id={id} className="max-w-[86%] rounded-[1.25rem] rounded-tl-md border border-border bg-surface px-4 py-3 shadow-tile">{children}</div>
+    </div>
+  );
+}
+
+/** Three dots while the coach "types". Skipped entirely under reduced motion. */
+function Typing() {
+  return (
+    <div className="flex items-start gap-2.5" aria-hidden>
+      <Avatar />
+      <div className="pop flex h-[2.75rem] items-center gap-1.5 rounded-[1.25rem] rounded-tl-md border border-border bg-surface px-4 shadow-tile">
+        {[0, 1, 2].map((i) => (
+          <span key={i} className="h-2 w-2 rounded-full bg-muted/70 motion-safe:animate-bounce" style={{ animationDelay: `${i * 140}ms` }} />
+        ))}
+      </div>
     </div>
   );
 }
 
 function UserBubble({ text, label, onEdit }: { text: string; label: string; onEdit: () => void }) {
   return (
-    <div className="flex justify-end">
-      <button type="button" onClick={onEdit} aria-label={`${label} Your answer: ${text}. Change it`}
-        className="max-w-[85%] break-words rounded-2xl rounded-tr-md bg-brand px-4 py-2.5 text-left text-brand-fg shadow-sm hover:opacity-90">
-        {text}
-        <span className="mt-0.5 block text-xs opacity-80 underline">Change</span>
+    <div className="rise flex justify-end">
+      <button
+        type="button" onClick={onEdit} aria-label={`${label} Your answer: ${text}. Change it`}
+        className="press max-w-[84%] break-words rounded-[1.25rem] rounded-br-md px-4 py-2.5 text-left text-brand-fg"
+        style={{ background: "var(--btn-bg)", boxShadow: "var(--glow)" }}
+      >
+        <span className="font-medium">{text}</span>
+        <span className="mt-0.5 block text-xs underline opacity-90">Change</span>
       </button>
     </div>
   );
@@ -45,6 +75,7 @@ export default function OnboardingPage() {
   const [answers, setAnswers] = useState<Answers>(EMPTY_ANSWERS);
   const [index, setIndex] = useState(0);
   const [phase, setPhase] = useState<Phase>("chat");
+  const [typing, setTyping] = useState(() => !prefersReduce());
   const [error, setError] = useState<string | null>(null);
   const [preview, setPreview] = useState<PreviewDto | null>(null);
   const [overrides, setOverrides] = useState<Required<Overrides> | null>(null);
@@ -54,10 +85,11 @@ export default function OnboardingPage() {
   const [saveError, setSaveError] = useState<string | null>(null);
 
   const areaRef = useRef<HTMLDivElement>(null);
-  const firstRender = useRef(true);
+  const interacted = useRef(false);
   const prefilled = useRef(false);
 
   const existing = profileApi.data;
+  const ready = !(profileApi.loading && !existing);
   // Prefill the name from sign-up so people aren't asked twice.
   useEffect(() => {
     if (prefilled.current || !existing?.user?.name) return;
@@ -67,17 +99,32 @@ export default function OnboardingPage() {
 
   const stepId = STEPS[index];
 
-  // Move keyboard focus (and the view) to the new question so screen-reader and keyboard users follow along.
+  /** Move to another question (or the plan). Each new question gets a short "typing" beat, skipped under reduced motion. */
+  const go = useCallback((nextIndex: number, nextPhase: Phase) => {
+    interacted.current = true;
+    setIndex(nextIndex);
+    setPhase(nextPhase);
+    setTyping(nextPhase === "chat" && !prefersReduce());
+  }, []);
+
   useEffect(() => {
-    if (firstRender.current) {
-      firstRender.current = false;
+    if (!typing || !ready) return;
+    const t = setTimeout(() => setTyping(false), TYPING_MS);
+    return () => clearTimeout(t);
+  }, [typing, index, ready]);
+
+  // Keep the newest question in view, and move keyboard focus to the new answer control so screen-reader and keyboard users follow along.
+  useEffect(() => {
+    if (!ready || !interacted.current) return;
+    const behavior = prefersReduce() ? "auto" : "smooth";
+    if (phase === "plan") {
+      window.scrollTo({ top: 0, behavior });
       return;
     }
-    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-    const el = areaRef.current;
-    el?.querySelector<HTMLElement>("input, textarea, button")?.focus({ preventScroll: true });
-    el?.scrollIntoView({ block: "center", behavior: reduce ? "auto" : "smooth" });
-  }, [index, phase]);
+    window.scrollTo({ top: document.documentElement.scrollHeight, behavior });
+    if (typing) return;
+    areaRef.current?.querySelector<HTMLElement>("input, textarea, button")?.focus({ preventScroll: true });
+  }, [index, phase, typing, ready]);
 
   const runPreview = useCallback(async (a: Answers, ov: Required<Overrides> | null) => {
     const payload = toPayload(a);
@@ -106,23 +153,22 @@ export default function OnboardingPage() {
     if (index === LAST) {
       setOverrides(null);
       setPreview(null);
-      setPhase("plan");
+      go(index, "plan");
       void runPreview(next, null);
     } else {
-      setIndex(index + 1);
+      go(index + 1, "chat");
     }
   };
 
   const back = () => {
     setError(null);
-    if (phase === "plan") setPhase("chat");
-    else setIndex(Math.max(0, index - 1));
+    if (phase === "plan") go(index, "chat");
+    else go(Math.max(0, index - 1), "chat");
   };
 
   const edit = (id: StepId) => {
     setError(null);
-    setIndex(STEPS.indexOf(id));
-    setPhase("chat");
+    go(STEPS.indexOf(id), "chat");
   };
 
   const save = async () => {
@@ -137,6 +183,7 @@ export default function OnboardingPage() {
       if (name && name !== existing?.user?.name) await patch("/api/profile", { name }).catch(() => undefined);
       // AppShell reads the cached profile; mark it onboarded first or it would bounce straight back here.
       profileApi.setData((prev) => (prev ? { ...prev, profile: { ...prev.profile, onboarded: true } } : prev));
+      haptic("success");
       notifyChanged();
       router.replace("/");
       router.refresh();
@@ -154,15 +201,56 @@ export default function OnboardingPage() {
       </Fragment>
     ));
 
-  if (profileApi.loading && !existing) {
-    return <Shell><LoadingBlock label="Getting ready" rows={2} /></Shell>;
+  if (!ready) {
+    return (
+      <Shell top={<TopBar />}>
+        <LoadingBlock label="Getting ready" rows={2} />
+      </Shell>
+    );
   }
 
   const done = phase === "plan";
   const helpText = help(stepId, answers);
+  const firstName = answers.name.trim().split(/\s+/)[0];
+  const targetLabel = answers.targetWeight.trim() ? summary("targetWeight", answers) : null;
+  const pct = ((done ? STEPS.length : index) / STEPS.length) * 100;
+
+  const top = (
+    <TopBar
+      onBack={back}
+      backDisabled={!done && index === 0}
+      label={done ? "All questions answered" : `Question ${index + 1} of ${STEPS.length}`}
+      value={done ? STEPS.length : index}
+      pct={pct}
+    />
+  );
+
+  const footer = done ? (
+    <div className="glass sticky bottom-0 z-20 border-t border-border/70 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="mx-auto w-full max-w-xl space-y-1.5 px-4 pt-3">
+        {saveError && <ErrorState message={saveError} onRetry={() => void save()} />}
+        <button className="btn btn-primary w-full !min-h-[56px] !text-base" onClick={() => void save()} disabled={saving || previewing || !preview}>
+          {saving ? <><Spinner label="Saving your plan" /> Saving…</> : <>Start my journey <ArrowRight className="h-5 w-5" aria-hidden /></>}
+        </button>
+        <button className="btn btn-ghost w-full !min-h-[44px]" onClick={back} disabled={saving}>Change an answer</button>
+      </div>
+    </div>
+  ) : (
+    <div className="glass sticky bottom-0 z-20 border-t border-border/70 pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div ref={areaRef} className="mx-auto max-h-[62dvh] w-full max-w-xl overflow-y-auto px-4 pt-3">
+        <section aria-label="Your answer">
+          {typing ? (
+            <Skeleton className="h-14 !rounded-2xl" />
+          ) : (
+            <StepInput key={stepId} id={stepId} answers={answers} set={(p) => setAnswers((a) => ({ ...a, ...p }))} submit={submit} error={error} labelId={QUESTION_ID} last={index === LAST} />
+          )}
+        </section>
+      </div>
+    </div>
+  );
 
   return (
-    <Shell>
+    <Shell top={top} footer={footer}>
       {existing?.profile.onboarded && (
         <div className="mb-4">
           <Notice>
@@ -171,82 +259,84 @@ export default function OnboardingPage() {
         </div>
       )}
 
-      <div className="mb-5 flex items-center gap-3">
-        <button type="button" onClick={back} disabled={!done && index === 0} className="btn btn-ghost !px-2.5" aria-label="Go back to the previous question">
-          <ArrowLeft className="h-5 w-5" aria-hidden /> <span>Back</span>
-        </button>
-        <div className="min-w-0 flex-1">
-          <p className="mb-1 text-xs font-medium text-muted">{done ? "All questions answered" : `Question ${index + 1} of ${STEPS.length}`}</p>
-          <ProgressBar value={done ? STEPS.length : index} max={STEPS.length} label="Setup progress" />
-        </div>
-      </div>
+      {done ? (
+        <section aria-label="Your starting plan">
+          <header className="rise mb-4">
+            <h1 className="display text-[2rem] font-extrabold leading-[1.1] tracking-tight">Your plan is <span className="text-grad">ready</span></h1>
+            <p className="mt-1.5 text-sm text-muted">{firstName ? `${firstName}, here's` : "Here's"} your starting plan, built from your answers. Nothing is final: you can change it any time.</p>
+          </header>
 
-      <div role="log" aria-live="polite" aria-relevant="additions" className="space-y-3">
-        <AssistantBubble>
-          <p>Hi, I&apos;m your coach. I&apos;ll ask a few quick questions, one at a time, to set up a starting plan. There&apos;s no time limit, and nothing is final: you can change everything later.</p>
-        </AssistantBubble>
+          {previewing && !preview && (
+            <div role="status" aria-live="polite" className="space-y-3">
+              <p className="flex items-center gap-2 text-sm text-muted"><Spinner label="Building your plan" /> Building your plan…</p>
+              <Skeleton className="h-56" />
+              <Skeleton className="h-28" />
+              <Skeleton className="h-24" />
+            </div>
+          )}
+          {previewError && !preview && <ErrorState message={previewError} onRetry={() => void runPreview(answers, overrides)} />}
+          {preview && (
+            <PlanPreview preview={preview} sex={answers.sex} goal={answers.goal} units={answers.unitSystem} recalculating={previewing} recalcError={previewError}
+              targetLabel={targetLabel} onRecalc={(o) => { setOverrides(o); void runPreview(answers, o); }} />
+          )}
 
-        {done ? (
-          <>
-            <details className="rounded-xl border border-border bg-surface px-3 py-2 text-sm">
-              <summary className="min-h-[44px] cursor-pointer py-2.5 font-medium">Review or change your answers</summary>
-              <div className="space-y-3 pb-3 pt-1">{pairs(STEPS)}</div>
-            </details>
-            <AssistantBubble><p>Thanks! Here&apos;s your starting plan.</p></AssistantBubble>
-          </>
-        ) : (
-          <>
-            {pairs(STEPS.slice(0, index))}
+          <details className="mt-4 rounded-2xl border border-border bg-surface px-4 text-sm">
+            <summary className="min-h-[48px] cursor-pointer py-3.5 font-semibold">Review or change your answers</summary>
+            <div className="space-y-3 pb-4 pt-1">{pairs(STEPS)}</div>
+          </details>
+        </section>
+      ) : (
+        <div role="log" aria-live="polite" aria-relevant="additions" className="space-y-3">
+          <AssistantBubble>
+            <p>Hi, I&apos;m your coach. I&apos;ll ask a few quick questions, one at a time, to set up a starting plan. There&apos;s no time limit, and nothing is final: you can change everything later.</p>
+          </AssistantBubble>
+          {pairs(STEPS.slice(0, index))}
+          {typing ? (
+            <Typing />
+          ) : (
             <AssistantBubble id={QUESTION_ID}>
-              <p className="font-medium">{question(stepId, answers)}</p>
+              <p className="font-semibold">{question(stepId, answers)}</p>
               {helpText && <p className="mt-1 text-sm text-muted">{helpText}</p>}
             </AssistantBubble>
-          </>
-        )}
-      </div>
-
-      <div ref={areaRef} className="mt-4 scroll-mb-24 scroll-mt-20">
-        {!done ? (
-          <section className="card" aria-label="Your answer">
-            <StepInput key={stepId} id={stepId} answers={answers} set={(p) => setAnswers((a) => ({ ...a, ...p }))} submit={submit} error={error} labelId={QUESTION_ID} last={index === LAST} />
-          </section>
-        ) : (
-          <section className="card space-y-4" aria-label="Your starting plan">
-            <h1 className="text-xl font-semibold">Your starting plan</h1>
-            {previewing && !preview && <div className="flex items-center gap-2 text-sm text-muted"><Spinner label="Building your plan" /> Building your plan…</div>}
-            {previewError && !preview && <ErrorState message={previewError} onRetry={() => void runPreview(answers, overrides)} />}
-            {preview && (
-              <>
-                <PlanPreview preview={preview} sex={answers.sex} goal={answers.goal} units={answers.unitSystem} recalculating={previewing} recalcError={previewError}
-                  onRecalc={(o) => { setOverrides(o); void runPreview(answers, o); }} />
-                {saveError && <ErrorState message={saveError} onRetry={() => void save()} />}
-                <div className="flex flex-wrap items-center gap-3 border-t border-border pt-4">
-                  <button className="btn btn-primary min-w-[180px]" onClick={() => void save()} disabled={saving || previewing}>
-                    {saving ? <><Spinner label="Saving your plan" /> Saving…</> : "Looks good, start"}
-                  </button>
-                  <button className="btn" onClick={back} disabled={saving}>Change an answer</button>
-                </div>
-              </>
-            )}
-          </section>
-        )}
-      </div>
+          )}
+        </div>
+      )}
 
       <p className="mt-6 text-center text-xs text-muted">Targets are starting estimates, not medical advice. AI can make mistakes. Double-check important results.</p>
     </Shell>
   );
 }
 
-function Shell({ children }: { children: ReactNode }) {
+/** Sticky top bar: back, "Question N of M", theme, and a slim gradient progress line along its bottom edge. */
+function TopBar({ onBack, backDisabled, label, value, pct }: { onBack?: () => void; backDisabled?: boolean; label?: string; value?: number; pct?: number }) {
   return (
-    <div className="min-h-screen">
-      <header className="sticky top-0 z-30 flex items-center justify-between border-b border-border bg-bg/85 px-4 py-2 backdrop-blur">
-        <span className="flex items-center gap-2 font-semibold">
-          <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-brand text-brand-fg"><Activity className="h-4 w-4" aria-hidden /></span> FitTrack AI
-        </span>
+    <>
+      <div className="mx-auto flex w-full max-w-xl items-center gap-2 px-2 py-1.5">
+        {onBack ? (
+          <button type="button" onClick={onBack} disabled={backDisabled} className="btn btn-ghost !min-h-[44px] !px-2.5" aria-label="Go back to the previous question">
+            <ArrowLeft className="h-5 w-5" aria-hidden /> <span>Back</span>
+          </button>
+        ) : (
+          <span className="display px-2.5 text-lg font-extrabold tracking-tight">Sukoon<span className="text-grad">Fit</span></span>
+        )}
+        <p className="min-w-0 flex-1 truncate text-center text-xs font-medium text-muted">{label}</p>
         <ThemeToggle />
-      </header>
-      <main id="main" className="mx-auto w-full max-w-2xl px-4 pb-24 pt-5">{children}</main>
+      </div>
+      {pct != null && (
+        <div role="progressbar" aria-label="Setup progress" aria-valuemin={0} aria-valuemax={STEPS.length} aria-valuenow={value} className="h-[3px] w-full bg-surface-3">
+          <div className="grad-brand h-full rounded-r-full transition-[width] duration-500 ease-out" style={{ width: `${pct}%` }} />
+        </div>
+      )}
+    </>
+  );
+}
+
+function Shell({ top, footer, children }: { top: ReactNode; footer?: ReactNode; children: ReactNode }) {
+  return (
+    <div className="flex min-h-dvh flex-col">
+      <header className="glass pt-safe sticky top-0 z-30 border-b border-border/60">{top}</header>
+      <main id="main" className="mx-auto w-full max-w-xl flex-1 px-4 pb-6 pt-5">{children}</main>
+      {footer}
     </div>
   );
 }

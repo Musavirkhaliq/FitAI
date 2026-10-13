@@ -1,19 +1,21 @@
 "use client";
-import { X } from "lucide-react";
-import { useState } from "react";
-import { Field, Toggle } from "@/components/ui";
+import { Ban, Utensils, X } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Field, Sheet, Toggle } from "@/components/ui";
 import type { ApiState } from "@/lib/client/api";
-import { SaveStatus, SectionCard, useSaver } from "./common";
+import { Group, GroupBody, Row, SaveStatus, SelectRow, useSaver } from "./common";
 import type { ProfileResponse } from "./types";
 
 const EXAMPLES = ["Pork", "Shellfish", "Dairy", "Gluten", "Nuts", "Eggs"];
 
-export function FoodSection({ api, data }: { api: ApiState<ProfileResponse>; data: ProfileResponse }) {
+export function FoodSection({ api, data, index = 0 }: { api: ApiState<ProfileResponse>; data: ProfileResponse; index?: number }) {
   const { profile } = data;
   const saver = useSaver(api);
+  const [open, setOpen] = useState(false);
   const [draft, setDraft] = useState("");
   const [tagError, setTagError] = useState<string | null>(null);
   const foods = profile.foodsAvoided;
+  const close = useCallback(() => setOpen(false), []);
 
   const saveFoods = (next: string[]) =>
     saver.save({ foodsAvoided: next }, (p) => ({ ...p, profile: { ...p.profile, foodsAvoided: next } }));
@@ -30,56 +32,67 @@ export function FoodSection({ api, data }: { api: ApiState<ProfileResponse>; dat
     void saveFoods(next);
   };
 
-  return (
-    <SectionCard id="food-h" title="Food" description="I won't suggest foods you avoid, and I'll keep your meal structure in mind.">
-      <div>
-        <Field label="Foods you avoid" htmlFor="f-add" hint="Type a food and press Enter, or separate several with commas.">
-          <div className="flex gap-2">
-            <input
-              id="f-add" className="input" value={draft} maxLength={80} onChange={(e) => setDraft(e.target.value)}
-              onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(draft); } }}
-              aria-invalid={tagError ? true : undefined} aria-describedby={tagError ? "f-err" : undefined}
-            />
-            <button type="button" className="btn" onClick={() => add(draft)} disabled={!draft.trim()}>Add</button>
-          </div>
-        </Field>
-        {tagError && <p id="f-err" role="alert" className="mt-1 text-sm text-bad">{tagError}</p>}
-        {foods.length > 0 ? (
-          <ul className="mt-3 flex flex-wrap gap-2" aria-label="Foods you avoid">
-            {foods.map((f) => (
-              <li key={f} className="inline-flex items-center gap-1 rounded-full bg-surface-2 py-1 pl-3 pr-1 text-sm">
-                {f}
-                <button type="button" className="flex h-9 w-9 items-center justify-center rounded-full hover:bg-border" aria-label={`Remove ${f}`} onClick={() => void saveFoods(foods.filter((x) => x !== f))}>
-                  <X className="h-4 w-4" aria-hidden />
-                </button>
-              </li>
-            ))}
-          </ul>
-        ) : (
-          <p className="mt-2 text-sm text-muted">Nothing listed. Common ones:</p>
-        )}
-        {foods.length === 0 && (
-          <div className="mt-2 flex flex-wrap gap-2">
-            {EXAMPLES.map((f) => <button key={f} type="button" className="btn !min-h-[40px] rounded-full" onClick={() => add(f)}>{f}</button>)}
-          </div>
-        )}
-      </div>
+  const summary = foods.length === 0 ? "None" : foods.length <= 2 ? foods.join(", ") : `${foods.slice(0, 2).join(", ")} +${foods.length - 2}`;
 
-      <Field label="Meals per day" htmlFor="f-meals">
-        <select
-          id="f-meals" className="input sm:max-w-[160px]" value={profile.mealsPerDay}
-          onChange={(e) => { const n = Number(e.target.value); void saver.save({ mealsPerDay: n }, (p) => ({ ...p, profile: { ...p.profile, mealsPerDay: n } })); }}
+  return (
+    <div>
+      <Group
+        id="food-h" title="Food" index={index}
+        description="I won't suggest foods you avoid, and I'll keep your meal structure in mind."
+        status={!open ? <SaveStatus saver={saver} /> : undefined}
+      >
+        <Row icon={Ban} tint="cal" label="Foods you avoid" value={summary} onClick={() => setOpen(true)} opens />
+        <SelectRow
+          icon={Utensils} tint="steps" label="Meals per day" id="f-meals" value={profile.mealsPerDay} display={profile.mealsPerDay}
+          onChange={(v) => { const n = Number(v); void saver.save({ mealsPerDay: n }, (p) => ({ ...p, profile: { ...p.profile, mealsPerDay: n } })); }}
         >
           {[1, 2, 3, 4, 5, 6, 7, 8].map((n) => <option key={n} value={n}>{n}</option>)}
-        </select>
-      </Field>
+        </SelectRow>
+        <GroupBody>
+          <Toggle
+            label="Use conservative calorie estimates" checked={profile.conservativeEstimates}
+            description="When a food's calories are uncertain, I'll lean towards the higher end. Good if you tend to under-estimate portions."
+            onChange={(v) => void saver.save({ conservativeEstimates: v }, (p) => ({ ...p, profile: { ...p.profile, conservativeEstimates: v } }))}
+          />
+        </GroupBody>
+      </Group>
 
-      <Toggle
-        label="Use conservative calorie estimates" checked={profile.conservativeEstimates}
-        description="When a food's calories are uncertain, I'll lean towards the higher end. Good if you tend to under-estimate portions."
-        onChange={(v) => void saver.save({ conservativeEstimates: v }, (p) => ({ ...p, profile: { ...p.profile, conservativeEstimates: v } }))}
-      />
-      <SaveStatus saver={saver} />
-    </SectionCard>
+      <Sheet open={open} onClose={close} title="Foods you avoid">
+        <div className="space-y-4">
+          <Field label="Foods you avoid" htmlFor="f-add" hint="Type a food and press Enter, or separate several with commas.">
+            <div className="flex gap-2">
+              <input
+                id="f-add" className="input" value={draft} maxLength={80} onChange={(e) => setDraft(e.target.value)} enterKeyHint="done"
+                onKeyDown={(e) => { if (e.key === "Enter") { e.preventDefault(); add(draft); } }}
+                aria-invalid={tagError ? true : undefined} aria-describedby={tagError ? "f-err" : undefined}
+              />
+              <button type="button" className="btn btn-primary shrink-0" onClick={() => add(draft)} disabled={!draft.trim()}>Add</button>
+            </div>
+          </Field>
+          {tagError && <p id="f-err" role="alert" className="text-sm text-bad">{tagError}</p>}
+          {foods.length > 0 ? (
+            <ul className="flex flex-wrap gap-2" aria-label="Foods you avoid">
+              {foods.map((f) => (
+                <li key={f} className="inline-flex min-h-[44px] items-center gap-1 rounded-full border border-border bg-surface-2 py-1 pl-4 pr-1 text-sm font-medium">
+                  {f}
+                  <button type="button" className="press flex h-9 w-9 items-center justify-center rounded-full hover:bg-surface-3" aria-label={`Remove ${f}`} onClick={() => void saveFoods(foods.filter((x) => x !== f))}>
+                    <X className="h-4 w-4" aria-hidden />
+                  </button>
+                </li>
+              ))}
+            </ul>
+          ) : (
+            <>
+              <p className="text-sm text-muted">Nothing listed. Common ones:</p>
+              <div className="flex flex-wrap gap-2">
+                {EXAMPLES.map((f) => <button key={f} type="button" className="chip" onClick={() => add(f)}>{f}</button>)}
+              </div>
+            </>
+          )}
+          <SaveStatus saver={saver} />
+          <button type="button" className="btn btn-primary w-full !min-h-[52px] !text-base" onClick={close}>Done</button>
+        </div>
+      </Sheet>
+    </div>
   );
 }
