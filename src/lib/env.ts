@@ -12,15 +12,21 @@ const schema = z.object({
   LLM_FALLBACK_API_KEY: z.string().optional(),
   LLM_FALLBACK_MODEL: z.string().optional(),
 
-  STT_PROVIDER: z.enum(["groq", "deepgram"]).default("groq"),
+  /** groq = Groq Whisper; local = any OpenAI-compatible Whisper server you host (STT_BASE_URL, no key needed). */
+  STT_PROVIDER: z.enum(["groq", "local", "deepgram", "assemblyai"]).default("groq"),
   STT_BASE_URL: z.string().url().default("https://api.groq.com/openai/v1"),
   STT_API_KEY: z.string().optional(),
   STT_MODEL: z.string().default("whisper-large-v3-turbo"),
   DEEPGRAM_API_KEY: z.string().optional(),
+  ASSEMBLYAI_API_KEY: z.string().optional(),
 
-  TTS_PROVIDER: z.enum(["google", "browser"]).default("google"),
+  TTS_PROVIDER: z.enum(["google", "elevenlabs", "browser"]).default("google"),
   GOOGLE_TTS_API_KEY: z.string().optional(),
   GOOGLE_TTS_VOICE: z.string().default("en-US-Neural2-F"),
+  /** ElevenLabs free-plan audio needs attribution and has no commercial rights: prototyping only. */
+  ELEVENLABS_API_KEY: z.string().optional(),
+  ELEVENLABS_VOICE_ID: z.string().default("21m00Tcm4TlvDq8ikWAM"),
+  ELEVENLABS_MODEL: z.string().default("eleven_flash_v2_5"),
 
   USDA_API_KEY: z.string().default("DEMO_KEY"),
 });

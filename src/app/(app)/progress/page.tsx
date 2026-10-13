@@ -1,6 +1,7 @@
 "use client";
 import Link from "next/link";
 import { PrList } from "@/components/progress/PrList";
+import { ProgressPhotos } from "@/components/progress/ProgressPhotos";
 import { StrengthChart } from "@/components/progress/StrengthChart";
 import type { WorkoutsDto } from "@/components/progress/types";
 import { VolumeBars } from "@/components/progress/VolumeBars";
@@ -110,6 +111,8 @@ export default function ProgressPage() {
           <ErrorState message={weight.error ?? "I couldn't load your body data."} onRetry={() => void weight.refresh()} />
         )}
       </section>
+
+      <ProgressPhotos />
     </div>
   );
 }

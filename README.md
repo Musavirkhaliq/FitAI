@@ -28,11 +28,13 @@ Create an account at `/register`; a short conversational onboarding builds your 
 | LLM | **Groq** (primary) | console.groq.com → API keys | `LLM_API_KEY` (+ base URL/model default) |
 | LLM fallback | Google Gemini (optional) | aistudio.google.com | `LLM_FALLBACK_*` |
 | Speech-to-text | **Groq Whisper** (same key) | — | `STT_API_KEY` optional, falls back to `LLM_API_KEY` |
-| STT fallback | Deepgram (optional) | console.deepgram.com | `DEEPGRAM_API_KEY` |
+| STT fallbacks | Deepgram, AssemblyAI (optional) | console.deepgram.com / assemblyai.com | `DEEPGRAM_API_KEY`, `ASSEMBLYAI_API_KEY` |
+| STT, self-hosted | any OpenAI-compatible Whisper server | run faster-whisper-server / whisper.cpp | `STT_PROVIDER=local`, `STT_BASE_URL` |
 | Text-to-speech | Google Cloud TTS | enable *Text-to-Speech API*, create an API key | `GOOGLE_TTS_API_KEY` |
+| TTS, premium | ElevenLabs (prototyping: free audio has no commercial rights) | elevenlabs.io | `TTS_PROVIDER=elevenlabs`, `ELEVENLABS_API_KEY` |
 | Foods | USDA FoodData Central | fdc.nal.usda.gov/api-key-signup | `USDA_API_KEY` (`DEMO_KEY` works for light use) |
 
-Everything degrades gracefully: with no TTS key the browser's Web Speech voice is used; with no USDA/OFF access the built-in catalog of ~80 everyday foods (incl. Indian staples) answers; with no LLM key you can still log manually on the Nutrition, Weight and Workout pages.
+Everything degrades gracefully: with no transcription key the mic uses the browser's built-in speech recognition (Chrome/Edge; the browser vendor processes that audio); with no TTS key the browser's Web Speech voice is used; with no USDA/OFF access the built-in catalog of ~80 everyday foods (incl. Indian staples) answers; with no LLM key you can still log manually on the Nutrition, Weight and Workout pages.
 
 **Free-tier warnings** (also in the build brief): Groq limits are per organisation; Gemini's daily cap drops to 50/day until you spend $10, so keep Groq primary; Deepgram/AssemblyAI credits are one-time; Google Cloud TTS needs billing enabled — **set a budget alert before testing in a loop**; some free tiers may train on your data (check terms before sending health data); limits change often — re-check the provider pages.
 
@@ -65,7 +67,10 @@ Mic → voice-activity detection with live waveform → auto-stop after ~1.5 s s
 | `npm run lint` | `tsc --noEmit` |
 | `npm test` | unit tests (engines, food/estimation, planners) — no DB or keys needed |
 | `INTEGRATION=1 DATABASE_URL=… npx vitest run src/server/integration.test.ts` | end-to-end against a real Postgres (LLM mocked) |
-| `npm run db:push` / `db:migrate` / `db:seed` | Prisma |
+| `npm run db:push` | quick schema sync for development |
+| `npm run db:migrate` / `db:deploy` | create a new migration / apply committed migrations (use `db:deploy` in production) |
+| `npm run db:rls` | enable row-level security on every table (see below) |
+| `npm run db:seed` | seed the shared food catalog |
 
 ## Project map
 
@@ -80,9 +85,17 @@ src/components/coach/       CoachProvider (chat + voice state machine), VoicePan
 src/app/(app)/              Today, Dashboard, Nutrition, Weight, Workouts (+session), Progress, Analytics, AI Coach, History, Settings (+Memory)
 ```
 
+## Database: migrations and row-level security
+
+- `prisma/migrations/` holds committed migrations (`20261013000000_init` = the schema as first deployed, then `20261014000000_progress_photos`). On a fresh database run `npm run db:deploy`. **Updating a live site? Follow [DEPLOY.md](DEPLOY.md)**: an existing database must be baselined first, or `migrate deploy` stops with P3005.
+- **Supabase:** every table in `public` is also reachable through Supabase's REST API by default. FitTrack never uses that API for data, so run `npm run db:rls` once: it enables RLS on all tables with no policies, which blocks the public `anon`/`authenticated` roles entirely. The app is unaffected because Prisma connects as the table owner, which bypasses RLS.
+- Keep the service-role key (`SUPABASE_SERVICE_ROLE_KEY`) server-only. It bypasses RLS.
+
 ## Notes & known limits
 
 - Calories, TDEE, deficit, fat lost and body-fat figures are **estimates** and are labelled as such everywhere. This is a coaching tool, not a medical device; it never diagnoses.
 - Rate limiting is in-process (fine for one instance). Use a shared store (Redis/Upstash) if you scale out.
 - Day strings (`YYYY-MM-DD`) are in each user's own timezone; set it in Settings.
-- Progress-photo upload is not built (the schema has a `photo_url` column ready).
+- Progress photos are stored in Postgres (downsized to ~1024 px JPEG in the browser, ≤ 1.5 MB, validated by file signature, visible only to their owner). For a large user base, move them to object storage.
+- Reminders only appear while the app is open (in-app and browser notifications). Notifications while the app is closed would need Web Push plus a scheduler, which isn't built.
+- Transcription is request/response (after you stop speaking), not live streaming.

@@ -2,6 +2,7 @@ import type { FoodEntry, MealType } from "@prisma/client";
 import { db } from "@/lib/db";
 import { addDays, dateRange } from "@/lib/dates";
 import { bmr, estimateDailyExpenditure, remaining } from "@/lib/engines/calories";
+import { microReferences, sumMicros, type MicroRef, type Micros } from "@/lib/engines/micros";
 import { summarizeTrend, type WeightPoint } from "@/lib/engines/weightTrend";
 import type { UserContext } from "./context";
 
@@ -43,6 +44,9 @@ export interface DaySummary {
   sleep: { hours: number; quality: number | null } | null;
   meals: { meal: MealType; entries: FoodEntry[]; totals: Totals }[];
   totals: Totals;
+  /** Estimated micronutrient totals for the day (sum of per-entry estimates). */
+  micros: Micros;
+  microRefs: MicroRef[];
   activity: { steps: number; trainingMin: number; entries: { id: string; type: string; steps: number | null; durationMin: number | null; notes: string | null }[] };
   water: number;
   vegServings: number;
@@ -97,6 +101,8 @@ export async function getDaySummary(ctx: UserContext, date: string): Promise<Day
       return { meal, entries, totals: sumEntries(entries) };
     }),
     totals,
+    micros: sumMicros(food),
+    microRefs: microReferences(ctx.profile.sex),
     activity: { steps, trainingMin, entries: acts.map((a) => ({ id: a.id, type: a.type, steps: a.steps, durationMin: a.durationMin, notes: a.notes })) },
     water: log?.waterMl ?? 0,
     vegServings: log?.vegServings ?? 0,

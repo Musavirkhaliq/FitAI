@@ -15,11 +15,26 @@ export class SttUnavailableError extends Error {
   }
 }
 
-/** Groq Whisper via the OpenAI-compatible endpoint. Confidence is derived from segment log-probs. */
-async function groqWhisper(audio: Buffer, mime: string, language?: string): Promise<Transcription> {
-  const key = sttKey();
+type ProviderName = "groq" | "local" | "deepgram" | "assemblyai";
+
+/** Which providers have what they need. "local" only needs a base URL that isn't the Groq default. */
+export function sttAvailable(): Record<ProviderName, boolean> {
+  const e = env();
+  return {
+    groq: !!sttKey(),
+    local: e.STT_PROVIDER === "local" && !!e.STT_BASE_URL,
+    deepgram: !!e.DEEPGRAM_API_KEY,
+    assemblyai: !!e.ASSEMBLYAI_API_KEY,
+  };
+}
+
+export const sttConfigured = () => Object.values(sttAvailable()).some(Boolean);
+
+/** Whisper over an OpenAI-compatible endpoint: Groq's hosted one, or your own faster-whisper / whisper.cpp server. */
+async function whisper(audio: Buffer, mime: string, language: string | undefined, local: boolean): Promise<Transcription> {
+  const key = local ? env().STT_API_KEY || "local" : sttKey();
   if (!key) throw new SttUnavailableError();
-  const client = new OpenAI({ apiKey: key, baseURL: env().STT_BASE_URL, maxRetries: 0, timeout: 30_000 });
+  const client = new OpenAI({ apiKey: key, baseURL: env().STT_BASE_URL, maxRetries: 0, timeout: local ? 60_000 : 30_000 });
   const ext = mime.includes("mp4") ? "mp4" : mime.includes("ogg") ? "ogg" : mime.includes("wav") ? "wav" : "webm";
   const file = await toFile(audio, `speech.${ext}`, { type: mime });
   const res = (await client.audio.transcriptions.create({
@@ -39,7 +54,7 @@ async function groqWhisper(audio: Buffer, mime: string, language?: string): Prom
     const noSpeech = Math.max(...segs.map((s) => s.no_speech_prob ?? 0));
     if (noSpeech > 0.8) confidence = Math.min(confidence, 0.2);
   }
-  return { text: res.text.trim(), confidence, provider: "groq-whisper" };
+  return { text: res.text.trim(), confidence, provider: local ? "local-whisper" : "groq-whisper" };
 }
 
 async function deepgram(audio: Buffer, mime: string): Promise<Transcription> {
@@ -57,13 +72,51 @@ async function deepgram(audio: Buffer, mime: string): Promise<Transcription> {
   return { text: alt?.transcript?.trim() ?? "", confidence: alt?.confidence ?? 0.5, provider: "deepgram" };
 }
 
-/** Primary provider first, then the other if it's configured. */
+/**
+ * AssemblyAI pre-recorded transcription: upload the bytes, create a transcript, poll until done. Billed per audio minute
+ * (not streaming sessions), so there's no WebSocket to leave open.
+ */
+async function assemblyai(audio: Buffer): Promise<Transcription> {
+  const key = env().ASSEMBLYAI_API_KEY;
+  if (!key) throw new SttUnavailableError();
+  const base = "https://api.assemblyai.com/v2";
+  const headers = { authorization: key };
+  const up = await fetch(`${base}/upload`, { method: "POST", headers: { ...headers, "content-type": "application/octet-stream" }, body: new Uint8Array(audio), signal: AbortSignal.timeout(30_000) });
+  if (!up.ok) throw new Error(`AssemblyAI upload ${up.status}`);
+  const { upload_url } = (await up.json()) as { upload_url: string };
+  const created = await fetch(`${base}/transcript`, {
+    method: "POST",
+    headers: { ...headers, "content-type": "application/json" },
+    body: JSON.stringify({ audio_url: upload_url, language_code: "en", punctuate: true, format_text: true, word_boost: ["dal", "paneer", "curd", "katori", "RPE", "reps"] }),
+    signal: AbortSignal.timeout(15_000),
+  });
+  if (!created.ok) throw new Error(`AssemblyAI create ${created.status}`);
+  const { id } = (await created.json()) as { id: string };
+  const deadline = Date.now() + 40_000;
+  while (Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 900));
+    const poll = await fetch(`${base}/transcript/${id}`, { headers, signal: AbortSignal.timeout(10_000) });
+    if (!poll.ok) throw new Error(`AssemblyAI poll ${poll.status}`);
+    const j = (await poll.json()) as { status: string; text?: string; confidence?: number; error?: string };
+    if (j.status === "completed") return { text: (j.text ?? "").trim(), confidence: j.confidence ?? 0.6, provider: "assemblyai" };
+    if (j.status === "error") throw new Error(`AssemblyAI: ${j.error ?? "failed"}`);
+  }
+  throw new Error("AssemblyAI timed out");
+}
+
+/** Primary provider first, then every other configured one. */
 export async function transcribe(audio: Buffer, mime: string, language?: string): Promise<Transcription> {
-  const order = env().STT_PROVIDER === "deepgram" ? [deepgram, groqWhisper] : [groqWhisper, deepgram];
+  const avail = sttAvailable();
+  const primary = env().STT_PROVIDER;
+  const order = [primary, ...(["groq", "deepgram", "assemblyai", "local"] as ProviderName[]).filter((p) => p !== primary)].filter((p) => avail[p]);
+  if (!order.length) throw new SttUnavailableError();
   let lastErr: unknown = new SttUnavailableError();
-  for (const fn of order) {
+  for (const p of order) {
     try {
-      return await (fn === groqWhisper ? groqWhisper(audio, mime, language) : deepgram(audio, mime));
+      if (p === "groq") return await whisper(audio, mime, language, false);
+      if (p === "local") return await whisper(audio, mime, language, true);
+      if (p === "deepgram") return await deepgram(audio, mime);
+      return await assemblyai(audio);
     } catch (err) {
       lastErr = err;
     }

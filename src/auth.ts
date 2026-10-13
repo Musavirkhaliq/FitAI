@@ -5,6 +5,7 @@ import bcrypt from "bcryptjs";
 import { z } from "zod";
 import { authConfig } from "./auth.config";
 import { db } from "./lib/db";
+import { linkGoogleAccount } from "./server/googleLink";
 
 let dummy: string | undefined;
 const dummyHash = () => (dummy ??= bcrypt.hashSync("not-a-real-password", 10));
@@ -51,59 +52,8 @@ export const { handlers, auth, signIn, signOut } = NextAuth({
     async signIn({ user, account }) {
       if (account?.provider === "google") {
         if (!user.email) return false;
-        const email = user.email.toLowerCase().trim();
-
-        let existingUser = await db.user.findUnique({
-          where: { email },
-          include: { accounts: true },
-        });
-
-        if (!existingUser) {
-          existingUser = await db.user.create({
-            data: {
-              email,
-              name: user.name || null,
-              image: user.image || null,
-              emailVerified: new Date(),
-              profile: { create: { timezone: "UTC" } },
-            },
-            include: { accounts: true },
-          });
-        } else {
-          // If user exists but email was not verified yet, Google verifies it
-          if (!existingUser.emailVerified) {
-            await db.user.update({
-              where: { id: existingUser.id },
-              data: { emailVerified: new Date(), image: existingUser.image || user.image },
-            });
-          }
-        }
-
-        // Link the Google Account if not linked already
-        const hasAccount = existingUser.accounts.some(
-          (a) => a.provider === account.provider && a.providerAccountId === account.providerAccountId
-        );
-
-        if (!hasAccount) {
-          await db.account.create({
-            data: {
-              userId: existingUser.id,
-              type: account.type,
-              provider: account.provider,
-              providerAccountId: account.providerAccountId,
-              access_token: account.access_token,
-              refresh_token: account.refresh_token,
-              expires_at: account.expires_at,
-              token_type: account.token_type,
-              scope: account.scope,
-              id_token: account.id_token,
-              session_state: (account.session_state as string) ?? null,
-            },
-          });
-        }
-
-        // Ensure user id maps to the db user id
-        user.id = existingUser.id;
+        // All linking rules (including the pre-registration hijack guard) live in one tested function.
+        user.id = await linkGoogleAccount({ email: user.email, name: user.name, image: user.image }, account);
         return true;
       }
 

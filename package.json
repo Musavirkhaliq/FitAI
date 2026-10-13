@@ -12,6 +12,9 @@
     "db:migrate": "dotenv -e .env.local -- prisma migrate dev",
     "db:seed": "dotenv -e .env.local -- tsx prisma/seed.ts",
     "db:local": "node scripts/local-db.mjs",
+    "db:deploy": "dotenv -e .env.local -- prisma migrate deploy",
+    "db:rls": "dotenv -e .env.local -- prisma db execute --file prisma/rls.sql --schema prisma/schema.prisma",
+    "db:rls:rollback": "dotenv -e .env.local -- prisma db execute --file prisma/rls-rollback.sql --schema prisma/schema.prisma",
     "postinstall": "prisma generate"
   },
   "dependencies": {

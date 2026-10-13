@@ -248,6 +248,75 @@ run("pipeline + tools against Postgres", () => {
     expect(Buffer.from(pdf.slice(0, 4)).toString()).toBe("%PDF");
   });
 
+  it("veg/fruit counters go up and down but never below zero", async () => {
+    const date = "2026-03-01";
+    const up = (await callTool(userId, "log_produce", { date, vegServings: 2, fruitServings: 1 })) as { vegServings: number; fruitServings: number };
+    expect(up).toMatchObject({ vegServings: 2, fruitServings: 1 });
+    const down = (await callTool(userId, "log_produce", { date, vegServings: -1 })) as { vegServings: number };
+    expect(down.vegServings).toBe(1);
+    const floor = (await callTool(userId, "log_produce", { date, vegServings: -5, fruitServings: -5 })) as { vegServings: number; fruitServings: number };
+    expect(floor).toMatchObject({ vegServings: 0, fruitServings: 0 });
+  });
+
+  it("day summaries include micronutrient totals and references", async () => {
+    const ctx = await loadUserContext(userId);
+    await callTool(userId, "log_food", {
+      date: "2026-03-02", meal: "LUNCH", source: "MANUAL",
+      entries: [{ food: "curd", quantity: 200, unit: "g", calories: 122, protein: 7, carbs: 9.4, fat: 6.6, sodium: 92, micros: { calcium: 242, vitB12: 0.74 }, confidence: "HIGH", estimateMin: 110, estimateMax: 134 }],
+    }, ctx);
+    const s = await getDaySummary(ctx, "2026-03-02");
+    expect(s.micros.calcium).toBe(242);
+    expect(s.micros.sodium).toBe(92);
+    expect(s.microRefs.find((r) => r.key === "sodium")?.kind).toBe("limit");
+  });
+
+  it("Google sign-in cannot be hijacked by a pre-registered, unverified password account", async () => {
+    const { linkGoogleAccount } = await import("./googleLink");
+    const email = `victim-${Date.now()}@example.com`;
+    // Attacker registers the victim's email with their own password (never verified) and holds a pending token.
+    const attacker = await db.user.create({ data: { email, passwordHash: "attacker-chosen-hash", emailVerified: null, profile: { create: {} } } });
+    await db.verificationToken.create({ data: { identifier: email, token: `tok-${Date.now()}`, expiresAt: new Date(Date.now() + 3600_000) } });
+
+    // The real owner later signs in with Google.
+    const id = await linkGoogleAccount({ email: email.toUpperCase(), name: "Victim" }, { type: "oauth", provider: "google", providerAccountId: `g-${Date.now()}` });
+    expect(id).toBe(attacker.id);
+    const after = await db.user.findUnique({ where: { id }, include: { accounts: true } });
+    expect(after?.emailVerified).not.toBeNull();
+    expect(after?.passwordHash).toBeNull(); // the attacker's password no longer works
+    expect(after?.accounts).toHaveLength(1);
+    expect(await db.verificationToken.count({ where: { identifier: email } })).toBe(0);
+
+    // Signing in again is idempotent (no duplicate account link).
+    await linkGoogleAccount({ email, name: "Victim" }, { type: "oauth", provider: "google", providerAccountId: after!.accounts[0].providerAccountId });
+    expect(await db.account.count({ where: { userId: id } })).toBe(1);
+    await db.user.delete({ where: { id } });
+  });
+
+  it("a verified password account keeps its password when the same person adds Google", async () => {
+    const { linkGoogleAccount } = await import("./googleLink");
+    const email = `owner-${Date.now()}@example.com`;
+    const u = await db.user.create({ data: { email, passwordHash: "real-hash", emailVerified: new Date(), profile: { create: {} } } });
+    await linkGoogleAccount({ email }, { type: "oauth", provider: "google", providerAccountId: `g2-${Date.now()}` });
+    expect((await db.user.findUnique({ where: { id: u.id } }))?.passwordHash).toBe("real-hash");
+    await db.user.delete({ where: { id: u.id } });
+  });
+
+  it("progress photos are stored per user, listed without bytes, and cascade on user delete", async () => {
+    const png = Buffer.from([0x89, 0x50, 0x4e, 0x47, 0x0d, 0x0a, 0x1a, 0x0a, 0, 0, 0, 0]);
+    const mine = await db.progressPhoto.create({ data: { userId, date: "2026-03-03", pose: "FRONT", mime: "image/png", bytes: png, size: png.length } });
+    await db.progressPhoto.create({ data: { userId: otherId, date: "2026-03-03", pose: "SIDE", mime: "image/png", bytes: png, size: png.length } });
+    const list = await db.progressPhoto.findMany({ where: { userId }, select: { id: true, pose: true, size: true } });
+    expect(list.map((p) => p.id)).toContain(mine.id);
+    expect(list.every((p) => !("bytes" in p))).toBe(true);
+    // Another user cannot read or delete it by id.
+    expect(await db.progressPhoto.findFirst({ where: { id: mine.id, userId: otherId } })).toBeNull();
+    expect((await db.progressPhoto.deleteMany({ where: { id: mine.id, userId: otherId } })).count).toBe(0);
+    const temp = await db.user.create({ data: { email: `ph-${Date.now()}@example.com`, passwordHash: "x" } });
+    await db.progressPhoto.create({ data: { userId: temp.id, date: "2026-03-03", mime: "image/png", bytes: png, size: png.length } });
+    await db.user.delete({ where: { id: temp.id } });
+    expect(await db.progressPhoto.count({ where: { userId: temp.id } })).toBe(0);
+  });
+
   it("deleting the user cascades to all owned rows", async () => {
     const temp = await db.user.create({ data: { email: `tmp-${Date.now()}@example.com`, passwordHash: "x" } });
     await callTool(temp.id, "log_weight", { date: "2026-03-30", weightKg: 80 });
