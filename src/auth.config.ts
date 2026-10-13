@@ -11,6 +11,7 @@ export const authConfig = {
       const isPublic =
         pathname === "/login" ||
         pathname === "/register" ||
+        pathname === "/verify-email" ||
         pathname.startsWith("/api/auth") ||
         pathname.startsWith("/api/register") ||
         pathname === "/manifest.webmanifest" ||
