@@ -1,4 +1,4 @@
-// FitTrack AI schema.
+// SukoonFit schema.
 // Conventions: every table carries user_id (directly or via its parent), created_at, updated_at;
 // all user-owned rows cascade-delete with the user. Calendar days are stored as "YYYY-MM-DD"
 // strings in the user's own timezone, so "today" never shifts with server UTC.

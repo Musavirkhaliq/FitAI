@@ -12,12 +12,12 @@ export default function HistoryPage() {
   const units = today.data?.profile.unitSystem ?? "METRIC";
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       <PageHeader title="History" subtitle="Search, browse and export everything you've logged." />
-      <SearchPanel />
-      <DayBrowser units={units} />
-      <ExportPanel />
-      <ChatHistory />
+      <SearchPanel index={1} />
+      <DayBrowser units={units} index={2} />
+      <ExportPanel index={3} />
+      <ChatHistory index={4} />
     </div>
   );
 }

@@ -2,80 +2,241 @@
 @tailwind components;
 @tailwind utilities;
 
-/* Design tokens as space-separated RGB so Tailwind opacity modifiers work.
-   Text/background pairs are chosen for ≥ 4.5:1 contrast (WCAG 2.1 AA) in both themes. */
+/*
+  SukoonFit design tokens (see docs/DESIGN.md). RGB triplets so Tailwind opacity modifiers work.
+  Text/background pairs are checked for >= 4.5:1 (WCAG 2.1 AA). The --c-* chart colours were validated with the
+  dataviz validator (CVD + normal-vision separation + >= 3:1 vs surface) in this fixed order, in both themes.
+*/
 :root {
-  --bg: 246 248 247;
+  --bg: 245 248 246;
   --surface: 255 255 255;
-  --surface-2: 238 242 240;
-  --border: 214 221 218;
-  --fg: 17 24 28;
-  --muted: 82 92 98;
+  --surface-2: 240 244 242;
+  --surface-3: 230 236 233;
+  --border: 218 225 222;
+  --fg: 13 20 24;
+  --muted: 84 96 102;
+
   --brand: 4 120 87;
   --brand-fg: 255 255 255;
-  --good: 21 128 61;
+  --brand-a: 16 185 129;
+  --brand-b: 6 182 212;
+  --good: 22 111 54;
   --warn: 146 84 0;
   --bad: 185 28 28;
+
+  --c-cal: 235 104 52;
+  --c-protein: 42 120 214;
+  --c-steps: 20 160 111;
+  --c-sleep: 74 58 167;
+  --c-fiber: 0 131 0;
+
+  /* Primary buttons: solid in light mode (white text needs the darker brand), gradient in dark mode. */
+  --btn-bg: rgb(4 120 87);
+  --shadow-tile: 0 1px 2px rgb(15 35 28 / 0.04), 0 10px 28px -14px rgb(15 35 28 / 0.16);
+  --shadow-float: 0 12px 32px -8px rgb(15 35 28 / 0.28);
+  --glow: 0 0 0 0 transparent;
+
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+  --d-fast: 140ms;
+  --d-base: 240ms;
+  --d-slow: 420ms;
+  --d-hero: 700ms;
+
   color-scheme: light;
 }
 
 .dark {
-  --bg: 11 16 19;
-  --surface: 19 26 30;
-  --surface-2: 28 37 42;
-  --border: 45 57 63;
-  --fg: 237 243 241;
-  --muted: 160 172 177;
+  --bg: 8 12 15;
+  --surface: 16 22 26;
+  --surface-2: 25 33 38;
+  --surface-3: 35 45 51;
+  --border: 38 50 56;
+  --fg: 238 244 242;
+  --muted: 158 172 178;
+
   --brand: 52 211 153;
   --brand-fg: 4 30 22;
+  --brand-a: 52 211 153;
+  --brand-b: 34 211 238;
   --good: 74 222 128;
   --warn: 251 191 36;
   --bad: 248 113 113;
+
+  --c-cal: 217 89 38;
+  --c-protein: 57 135 229;
+  --c-steps: 25 158 112;
+  --c-sleep: 144 133 233;
+  --c-fiber: 0 131 0;
+
+  --btn-bg: linear-gradient(135deg, rgb(52 211 153), rgb(34 211 238));
+  --shadow-tile: inset 0 1px 0 rgb(255 255 255 / 0.04), 0 12px 32px -16px rgb(0 0 0 / 0.6);
+  --shadow-float: 0 16px 40px -8px rgb(0 0 0 / 0.7);
+  --glow: 0 0 32px -4px rgb(52 211 153 / 0.35);
+
   color-scheme: dark;
 }
 
 html {
   -webkit-tap-highlight-color: transparent;
+  text-size-adjust: 100%;
 }
 
 body {
   @apply bg-bg font-sans text-fg antialiased;
-  background-image: radial-gradient(1200px 500px at 50% -200px, rgb(var(--brand) / 0.08), transparent 70%);
+  background-image:
+    radial-gradient(900px 420px at 85% -120px, rgb(var(--brand-b) / 0.09), transparent 70%),
+    radial-gradient(900px 480px at 5% -160px, rgb(var(--brand-a) / 0.1), transparent 70%);
   background-attachment: fixed;
+  font-feature-settings: "cv11", "ss01";
+  overscroll-behavior-y: none;
 }
 
 /* Visible keyboard focus everywhere. */
 :focus-visible {
   outline: 2px solid rgb(var(--brand));
   outline-offset: 2px;
-  border-radius: 6px;
+  border-radius: 8px;
+}
+
+::selection {
+  background: rgb(var(--brand) / 0.25);
 }
 
 @layer components {
+  /* ── Surfaces ─────────────────────────────────────────────── */
   .card {
-    @apply rounded-xl2 border border-border bg-surface p-4 shadow-sm sm:p-5;
+    @apply rounded-[1.5rem] border border-border bg-surface p-4 sm:p-5;
+    box-shadow: var(--shadow-tile);
   }
+  .tile {
+    @apply relative overflow-hidden rounded-[1.5rem] border border-border bg-surface p-4;
+    box-shadow: var(--shadow-tile);
+  }
+  .glass {
+    background: rgb(var(--surface) / 0.74);
+    -webkit-backdrop-filter: blur(20px) saturate(1.5);
+    backdrop-filter: blur(20px) saturate(1.5);
+  }
+  .hairline {
+    box-shadow: inset 0 0 0 1px rgb(var(--border));
+  }
+
+  /* ── Type ─────────────────────────────────────────────────── */
+  .display {
+    font-family: var(--font-display), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    letter-spacing: -0.025em;
+  }
+  .num {
+    font-family: var(--font-display), var(--font-inter), ui-sans-serif, system-ui, sans-serif;
+    font-weight: 700;
+    letter-spacing: -0.03em;
+    line-height: 1;
+  }
+  .eyebrow {
+    @apply text-[11px] font-semibold uppercase tracking-[0.08em] text-muted;
+  }
+
+  /* ── Controls (48 px: comfortable for thumbs) ─────────────── */
   .btn {
-    @apply inline-flex min-h-[44px] items-center justify-center gap-2 rounded-xl border border-border bg-surface px-4 text-sm font-medium transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50;
+    @apply press inline-flex min-h-[48px] items-center justify-center gap-2 rounded-2xl border border-border bg-surface px-4 text-sm font-semibold transition-colors hover:bg-surface-2 disabled:cursor-not-allowed disabled:opacity-50;
   }
   .btn-primary {
-    @apply border-transparent bg-brand text-brand-fg hover:opacity-90;
+    @apply border-transparent text-brand-fg hover:opacity-95;
+    background: var(--btn-bg);
+    box-shadow: var(--glow);
   }
   .btn-ghost {
     @apply border-transparent bg-transparent hover:bg-surface-2;
   }
   .input {
-    @apply min-h-[44px] w-full rounded-xl border border-border bg-surface px-3 text-base text-fg placeholder:text-muted focus:border-brand;
+    @apply min-h-[48px] w-full rounded-2xl border border-border bg-surface-2 px-4 text-base text-fg placeholder:text-muted transition-colors focus:border-brand focus:bg-surface;
   }
   .label {
-    @apply mb-1 block text-sm font-medium;
+    @apply mb-1.5 block text-sm font-semibold;
   }
+  .chip {
+    @apply press inline-flex min-h-[40px] items-center gap-1.5 rounded-full border border-border bg-surface px-3.5 text-sm font-medium transition-colors hover:bg-surface-2;
+  }
+
+  /* ── Motion ───────────────────────────────────────────────── */
+  .press {
+    transition: transform var(--d-fast) var(--ease-out), background-color var(--d-fast), opacity var(--d-fast);
+  }
+  .press:active:not(:disabled) {
+    transform: scale(0.97);
+  }
+  .rise {
+    animation: rise var(--d-slow) var(--ease-out) both;
+    animation-delay: calc(var(--i, 0) * 45ms);
+  }
+  .pop {
+    animation: pop var(--d-base) var(--ease-out) both;
+  }
+  .shimmer {
+    background-image: linear-gradient(100deg, rgb(var(--surface-2)) 30%, rgb(var(--surface-3)) 50%, rgb(var(--surface-2)) 70%);
+    background-size: 200% 100%;
+    animation: shimmer 1.5s linear infinite;
+  }
+  .grad-brand {
+    background-image: linear-gradient(135deg, rgb(var(--brand-a)), rgb(var(--brand-b)));
+  }
+  .text-grad {
+    background-image: linear-gradient(135deg, rgb(var(--brand-a)), rgb(var(--brand-b)));
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+
   .sr-only-focusable:not(:focus):not(:focus-within) {
     @apply sr-only;
   }
 }
 
-/* Respect reduced-motion preferences. */
+@layer utilities {
+  .pb-safe {
+    padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  }
+  .pt-safe {
+    padding-top: env(safe-area-inset-top);
+  }
+  .scrollbar-none {
+    scrollbar-width: none;
+  }
+  .scrollbar-none::-webkit-scrollbar {
+    display: none;
+  }
+}
+
+@keyframes rise {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes pop {
+  from {
+    opacity: 0;
+    transform: scale(0.94);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+@keyframes shimmer {
+  from {
+    background-position: 200% 0;
+  }
+  to {
+    background-position: -200% 0;
+  }
+}
+
+/* Respect reduced-motion preferences: no draws, no transforms, instant state changes. */
 @media (prefers-reduced-motion: reduce) {
   *,
   *::before,
@@ -83,10 +244,9 @@ body {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
   }
-}
-
-/* Safe-area padding for phones with home indicators. */
-.pb-safe {
-  padding-bottom: max(0.5rem, env(safe-area-inset-bottom));
+  .shimmer {
+    animation: none;
+  }
 }

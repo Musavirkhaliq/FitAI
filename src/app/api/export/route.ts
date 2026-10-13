@@ -20,7 +20,7 @@ export const GET = route(async (req) => {
   const p = Object.fromEntries(new URL(req.url).searchParams);
   const { type, format, from, to } = q.parse(p);
   const table = await buildTable(userId, type, from, to);
-  const name = `fittrack-${type}-${new Date().toISOString().slice(0, 10)}`;
+  const name = `sukoonfit-${type}-${new Date().toISOString().slice(0, 10)}`;
   const dl = (ext: string) => `attachment; filename="${name}.${ext}"`;
   if (format === "csv") return new Response(toCsv(table), { headers: { "Content-Type": "text/csv; charset=utf-8", "Content-Disposition": dl("csv") } });
   if (format === "xlsx") return new Response(new Uint8Array(await toXlsx(table)), { headers: { "Content-Type": "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet", "Content-Disposition": dl("xlsx") } });

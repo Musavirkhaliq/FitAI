@@ -1,6 +1,7 @@
 "use client";
+import { Lightbulb } from "lucide-react";
 import { useState } from "react";
-import { Badge, Notice } from "@/components/ui";
+import { Badge, Notice, haptic } from "@/components/ui";
 import { logTool } from "@/lib/client/api";
 import { fmtNum } from "@/lib/client/format";
 import type { CalorieAdviceDto } from "@/lib/client/types";
@@ -26,6 +27,8 @@ const recentlyAdjusted = (): boolean => {
   }
 };
 
+const WASH = "linear-gradient(150deg, rgb(var(--brand-a) / 0.12), rgb(var(--brand-b) / 0.05) 60%), rgb(var(--surface))";
+
 /**
  * Calorie-target suggestion. A suggestion only: the API already waits for ~14 days of data; we render its
  * reason and offer a one-tap change that the user chooses to make. After a change we pause the offer for a
@@ -39,9 +42,11 @@ export function CalorieAdviceCard({ advice, onApplied }: { advice: CalorieAdvice
 
   if (!advice) {
     return (
-      <section className="card" aria-labelledby="adv-h">
-        <h2 id="adv-h" className="text-sm font-semibold">Calorie target suggestion</h2>
-        <p className="mt-1 text-sm text-muted">Set a goal and keep weighing in. After about 14 days I can suggest small tweaks to your calorie target.</p>
+      <section className="tile rise" aria-labelledby="adv-h">
+        <h2 id="adv-h" className="flex items-center gap-2 text-sm font-bold">
+          <Lightbulb className="h-4 w-4 text-muted" aria-hidden /> Calorie target suggestion
+        </h2>
+        <p className="mt-2 text-sm text-muted">Set a goal and keep weighing in. After about 14 days I can suggest small tweaks to your calorie target.</p>
       </section>
     );
   }
@@ -53,6 +58,7 @@ export function CalorieAdviceCard({ advice, onApplied }: { advice: CalorieAdvice
     try {
       const r = await logTool("update_goal", { calorieTarget: advice.suggestedTarget });
       setDone(advice.suggestedTarget);
+      haptic("success");
       try {
         window.localStorage.setItem(ADJUSTED_KEY, String(Date.now()));
       } catch {
@@ -68,12 +74,15 @@ export function CalorieAdviceCard({ advice, onApplied }: { advice: CalorieAdvice
   };
 
   return (
-    <section className="card space-y-3" aria-labelledby="adv-h">
+    <section className="tile rise space-y-3.5" aria-labelledby="adv-h" style={{ background: WASH }}>
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <h2 id="adv-h" className="text-sm font-semibold">Calorie target suggestion</h2>
+        <h2 id="adv-h" className="flex items-center gap-2 text-sm font-bold">
+          <span className="grad-brand flex h-7 w-7 items-center justify-center rounded-full text-brand-fg"><Lightbulb className="h-4 w-4" aria-hidden /></span>
+          Calorie target suggestion
+        </h2>
         <Badge tone={advice.action === "KEEP" ? "good" : "neutral"}>{ACTION_LABEL[advice.action]}</Badge>
       </div>
-      <p className="text-sm">{advice.reason}</p>
+      <p className="text-[0.95rem] leading-relaxed">{advice.reason}</p>
 
       {done != null ? (
         <Notice tone="good">Target set to {fmtNum(done)} kcal. Give it a week or two before judging it; the trend needs time to show.</Notice>
@@ -81,11 +90,11 @@ export function CalorieAdviceCard({ advice, onApplied }: { advice: CalorieAdvice
         cooling ? (
           <p className="text-sm text-muted">You changed your target recently. Let the trend catch up for a week or so before adjusting again.</p>
         ) : (
-          <div className="flex flex-wrap items-center gap-3">
-            <button className="btn btn-primary" onClick={() => void apply()} disabled={busy}>
-              Set target to {fmtNum(advice.suggestedTarget)} kcal
+          <div className="space-y-2">
+            <button className="btn btn-primary w-full" onClick={() => void apply()} disabled={busy}>
+              {busy ? "Setting…" : `Set target to ${fmtNum(advice.suggestedTarget)} kcal`}
             </button>
-            <span className="text-sm text-muted">{advice.deltaKcal > 0 ? "+" : "−"}{fmtNum(Math.abs(advice.deltaKcal))} kcal/day. Your call, not required.</span>
+            <p className="text-center text-xs text-muted">{advice.deltaKcal > 0 ? "+" : "−"}{fmtNum(Math.abs(advice.deltaKcal))} kcal/day. Your call, not required.</p>
           </div>
         )
       ) : null}

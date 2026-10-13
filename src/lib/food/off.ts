@@ -1,6 +1,6 @@
 import type { FoodRecord } from "./types";
 
-const UA = "FitTrackAI/0.1 (self-hosted fitness coach)";
+const UA = "SukoonFit/0.1 (self-hosted fitness coach)";
 
 interface OffProduct {
   code?: string;

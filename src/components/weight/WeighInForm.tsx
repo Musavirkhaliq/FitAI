@@ -1,7 +1,7 @@
 "use client";
-import { Scale } from "lucide-react";
-import { useState, type FormEvent } from "react";
-import { clsx, Field, Notice } from "@/components/ui";
+import { Check, Scale } from "lucide-react";
+import { useEffect, useRef, useState, type FormEvent } from "react";
+import { clsx, Field, haptic, Notice } from "@/components/ui";
 import { logTool } from "@/lib/client/api";
 import { lbToKg, todayLocal, type UnitSystem } from "@/lib/client/format";
 
@@ -15,7 +15,10 @@ export interface WeighInSaved {
   queued: boolean;
 }
 
-/** Weigh-in form. Saving on a date that already has one replaces it (the API upserts by day). */
+/**
+ * Weigh-in form, designed to live inside a bottom Sheet: one big number field, then date/time, then condition chips.
+ * Saving on a date that already has one replaces it (the API upserts by day).
+ */
 export function WeighInForm({ units, onSaved }: { units: UnitSystem; onSaved: (w: WeighInSaved) => void }) {
   const [date, setDate] = useState(todayLocal);
   const [weight, setWeight] = useState("");
@@ -24,6 +27,13 @@ export function WeighInForm({ units, onSaved }: { units: UnitSystem; onSaved: (w
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState<{ tone: "good" | "warn"; text: string } | null>(null);
   const unit = units === "IMPERIAL" ? "lb" : "kg";
+  const weightRef = useRef<HTMLInputElement>(null);
+
+  // The sheet focuses itself first; move focus to the weight field right after so the number pad opens.
+  useEffect(() => {
+    const t = window.setTimeout(() => weightRef.current?.focus(), 80);
+    return () => window.clearTimeout(t);
+  }, []);
 
   const submit = async (e: FormEvent) => {
     e.preventDefault();
@@ -32,16 +42,18 @@ export function WeighInForm({ units, onSaved }: { units: UnitSystem; onSaved: (w
     const kg = Math.round((units === "IMPERIAL" ? lbToKg(v) : v) * 100) / 100;
     if (!Number.isFinite(v) || v <= 0 || kg < 25 || kg > 400) {
       setMsg({ tone: "warn", text: `Enter a weight in ${unit} that looks right, for example ${units === "IMPERIAL" ? "186.5" : "84.5"}.` });
+      haptic("warn");
       return;
     }
     const conditions = conds.length ? conds.join(", ").toLowerCase() : null;
     setBusy(true);
     try {
       const r = await logTool("log_weight", { date, weightKg: kg, ...(time ? { time } : {}), ...(conditions ? { conditions } : {}) });
-      onSaved({ date, weightKg: kg, time: time || null, conditions, queued: r.queued });
+      haptic("success");
       setWeight("");
       setConds([]);
       setMsg(r.queued ? { tone: "warn", text: "You're offline. Your weigh-in is queued and will sync when you're back online." } : { tone: "good", text: "Weigh-in saved. One day is a data point; the averages tell the story." });
+      onSaved({ date, weightKg: kg, time: time || null, conditions, queued: r.queued });
     } catch (err) {
       setMsg({ tone: "warn", text: (err as Error).message });
     } finally {
@@ -50,12 +62,19 @@ export function WeighInForm({ units, onSaved }: { units: UnitSystem; onSaved: (w
   };
 
   return (
-    <form onSubmit={(e) => void submit(e)} className="card space-y-3" aria-labelledby="wi-h">
-      <h2 id="wi-h" className="text-sm font-semibold">Log a weigh-in</h2>
+    <form onSubmit={(e) => void submit(e)} className="space-y-4" aria-label="Log a weigh-in">
+      <div>
+        <label className="label" htmlFor="wi-weight">Weight ({unit})</label>
+        <div className="relative">
+          <input
+            ref={weightRef} id="wi-weight" inputMode="decimal" autoComplete="off"
+            className="input display !min-h-[68px] !pr-14 text-center !text-[2.25rem] font-extrabold tracking-tight"
+            value={weight} onChange={(e) => setWeight(e.target.value)} placeholder={units === "IMPERIAL" ? "186.5" : "84.5"}
+          />
+          <span aria-hidden className="pointer-events-none absolute right-5 top-1/2 -translate-y-1/2 text-sm font-semibold text-muted">{unit}</span>
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-3">
-        <Field label={`Weight (${unit})`} htmlFor="wi-weight">
-          <input id="wi-weight" inputMode="decimal" className="input" value={weight} onChange={(e) => setWeight(e.target.value)} placeholder={units === "IMPERIAL" ? "186.5" : "84.5"} autoComplete="off" />
-        </Field>
         <Field label="Date" htmlFor="wi-date">
           <input id="wi-date" type="date" className="input" value={date} max={todayLocal()} onChange={(e) => setDate(e.target.value)} required />
         </Field>
@@ -73,17 +92,18 @@ export function WeighInForm({ units, onSaved }: { units: UnitSystem; onSaved: (w
                 key={c}
                 type="button"
                 aria-pressed={on}
-                onClick={() => setConds((p) => (on ? p.filter((x) => x !== c) : [...p, c]))}
-                className={clsx("min-h-[44px] rounded-full border px-4 text-sm font-medium transition-colors", on ? "border-brand bg-brand/15 text-brand" : "border-border bg-surface hover:bg-surface-2")}
+                onClick={() => { haptic(); setConds((p) => (on ? p.filter((x) => x !== c) : [...p, c])); }}
+                className={clsx("chip !min-h-[48px] !px-4", on && "!border-brand !bg-brand/10 text-brand")}
               >
-                {on ? "✓ " : ""}{c}
+                {on && <Check className="h-4 w-4" aria-hidden />}
+                {c}
               </button>
             );
           })}
         </div>
       </fieldset>
-      <button className="btn btn-primary w-full sm:w-auto" disabled={busy || !weight.trim()}>
-        <Scale className="h-4 w-4" aria-hidden /> {busy ? "Saving…" : "Save weigh-in"}
+      <button className="btn btn-primary w-full !min-h-[52px] text-base" disabled={busy || !weight.trim()}>
+        <Scale className="h-5 w-5" aria-hidden /> {busy ? "Saving…" : "Save weigh-in"}
       </button>
       <div aria-live="polite">{msg && <Notice tone={msg.tone}>{msg.text}</Notice>}</div>
     </form>

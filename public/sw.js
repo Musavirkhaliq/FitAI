@@ -1,4 +1,4 @@
-/* FitTrack AI service worker: cache-first for static assets, network-first for pages with an offline fallback.
+/* SukoonFit service worker: cache-first for static assets, network-first for pages with an offline fallback.
    API calls are never cached here — offline writes are queued in IndexedDB by the app itself. */
 const STATIC = "fittrack-static-v1";
 

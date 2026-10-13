@@ -1,11 +1,10 @@
 "use client";
-import { Brain, Download, LogOut, Trash2 } from "lucide-react";
+import { Brain, FileDown, LogOut, Trash2 } from "lucide-react";
 import { signOut } from "next-auth/react";
-import Link from "next/link";
 import { useCallback, useState } from "react";
 import { Field, Sheet, Spinner } from "@/components/ui";
 import { ApiError, del } from "@/lib/client/api";
-import { DISCLAIMER_TEXT, MEDICAL_TEXT, SectionCard } from "./common";
+import { DISCLAIMER_TEXT, MEDICAL_TEXT, Group, IconTile, Row } from "./common";
 
 const EXPORTS = [
   { type: "nutrition", label: "Nutrition" },
@@ -16,7 +15,7 @@ const EXPORTS = [
 ] as const;
 const FORMATS = ["csv", "xlsx", "pdf"] as const;
 
-export function DataSection() {
+export function DataSection({ index = 0 }: { index?: number }) {
   const [open, setOpen] = useState(false);
   const [typed, setTyped] = useState("");
   const [busy, setBusy] = useState(false);
@@ -44,42 +43,40 @@ export function DataSection() {
   };
 
   return (
-    <SectionCard id="data-h" title="Your data" description="It's your data. Download it any time, or delete it all.">
-      <div>
-        <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold"><Download className="h-4 w-4" aria-hidden /> Export</h3>
-        <ul className="divide-y divide-border rounded-xl border border-border">
-          {EXPORTS.map((x) => (
-            <li key={x.type} className="flex flex-wrap items-center justify-between gap-2 px-3 py-1.5">
-              <span className="text-sm font-medium">{x.label}</span>
-              <span className="flex gap-1">
-                {FORMATS.map((f) => (
-                  <a key={f} href={`/api/export?type=${x.type}&format=${f}`} download className="btn btn-ghost !min-h-[44px] !px-3 uppercase" aria-label={`Download ${x.label} as ${f.toUpperCase()}`}>{f}</a>
-                ))}
-              </span>
-            </li>
-          ))}
-        </ul>
-      </div>
+    <div>
+    <div className="space-y-6">
+      <Group id="data-h" title="Your data" index={index} description="It's your data. Download it any time, or delete it all.">
+        {EXPORTS.map((x) => (
+          <div key={x.type} className="flex min-h-[56px] flex-wrap items-center gap-x-3 gap-y-1 px-4 py-1.5">
+            <IconTile icon={FileDown} tint="protein" />
+            <span className="min-w-0 flex-1 font-medium">{x.label}</span>
+            <span className="flex gap-1">
+              {FORMATS.map((f) => (
+                <a key={f} href={`/api/export?type=${x.type}&format=${f}`} download className="press inline-flex min-h-[44px] min-w-[48px] items-center justify-center rounded-xl bg-surface-2 px-2.5 text-xs font-bold uppercase tracking-wide hover:bg-surface-3" aria-label={`Download ${x.label} as ${f.toUpperCase()}`}>{f}</a>
+              ))}
+            </span>
+          </div>
+        ))}
+        <Row icon={Brain} tint="brand" label="What your coach remembers" hint="See, edit or delete anything the coach has noted about you." href="/settings/memory" />
+      </Group>
 
-      <Link href="/settings/memory" className="flex min-h-[44px] items-center gap-3 rounded-xl border border-border px-3 py-2 hover:bg-surface-2">
-        <Brain className="h-5 w-5 text-brand" aria-hidden />
-        <span>
-          <span className="block font-medium">What your coach remembers</span>
-          <span className="block text-sm text-muted">See, edit or delete anything the coach has noted about you.</span>
-        </span>
-      </Link>
+      <Group id="account-h" title="Account" index={index + 1}>
+        <Row
+          icon={LogOut} tint="neutral" label="Sign out" disabled={signingOut}
+          value={signingOut ? <Spinner label="Signing out" /> : undefined}
+          onClick={() => { setSigningOut(true); void signOut({ callbackUrl: "/login" }); }}
+        />
+      </Group>
 
-      <div className="flex flex-wrap gap-2">
-        <button type="button" className="btn" disabled={signingOut} onClick={() => { setSigningOut(true); void signOut({ callbackUrl: "/login" }); }}>
-          {signingOut ? <Spinner label="Signing out" /> : <LogOut className="h-4 w-4" aria-hidden />} Sign out
-        </button>
-        <button type="button" className="btn border-bad/50 text-bad" onClick={() => setOpen(true)}><Trash2 className="h-4 w-4" aria-hidden /> Delete my account and all data</button>
-      </div>
+      <Group id="danger-h" title="Danger zone" tone="danger" index={index + 2} description="Deleting your account removes everything permanently. You may want to export your data first.">
+        <Row icon={Trash2} tint="bad" danger label="Delete my account and all data" onClick={() => setOpen(true)} opens />
+      </Group>
 
-      <div className="space-y-1 border-t border-border pt-3 text-xs text-muted">
+      <div className="space-y-1 px-2 text-xs leading-relaxed text-muted">
         <p>{DISCLAIMER_TEXT}</p>
         <p>{MEDICAL_TEXT}</p>
       </div>
+    </div>
 
       <Sheet open={open} onClose={close} title="Delete your account?">
         <div className="space-y-3 text-sm">
@@ -88,15 +85,15 @@ export function DataSection() {
           <Field label="Type DELETE to confirm" htmlFor="del-confirm">
             <input id="del-confirm" className="input" autoComplete="off" autoCapitalize="characters" value={typed} onChange={(e) => setTyped(e.target.value)} />
           </Field>
-          {error && <p role="alert" className="text-bad">{error}</p>}
-          <div className="flex flex-wrap gap-2 pt-1">
-            <button type="button" className="btn" onClick={close} disabled={busy}>Keep my account</button>
-            <button type="button" className="btn border-transparent bg-bad text-white hover:opacity-90" disabled={typed !== "DELETE" || busy} onClick={() => void remove()}>
+          {error && <p role="alert" className="rounded-2xl border border-bad/30 bg-bad/10 px-3.5 py-2.5 text-bad">{error}</p>}
+          <div className="flex flex-col gap-2 pt-1 sm:flex-row-reverse">
+            <button type="button" className="btn flex-1 !min-h-[52px] border-transparent bg-bad text-white hover:bg-bad hover:opacity-90 dark:text-bg" disabled={typed !== "DELETE" || busy} onClick={() => void remove()}>
               {busy ? <><Spinner label="Deleting" /> Deleting…</> : "Delete everything"}
             </button>
+            <button type="button" className="btn btn-primary flex-1 !min-h-[52px]" onClick={close} disabled={busy}>Keep my account</button>
           </div>
         </div>
       </Sheet>
-    </SectionCard>
+    </div>
   );
 }

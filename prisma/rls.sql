@@ -1,7 +1,7 @@
 -- Row-level security hardening (idempotent). Run once per database:  npm run db:rls
 --
 -- Why: on Supabase every table in `public` is also exposed through the project's REST API to the `anon` and
--- `authenticated` roles. FitTrack never uses that API for data (all access goes through the app server using
+-- `authenticated` roles. SukoonFit never uses that API for data (all access goes through the app server using
 -- Prisma), so we turn RLS on for every table and add NO policies: those roles can then read and write nothing.
 --
 -- The app is unaffected: Prisma connects as the table owner (the `postgres` role on Supabase), and owners bypass RLS

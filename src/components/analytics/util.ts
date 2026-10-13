@@ -33,3 +33,12 @@ export const padDomain = [(min: number) => Math.floor(min - 0.5), (max: number) 
 export const fmtRange = (from: string, to: string) => `${fmtDay(from, { day: "numeric", month: "short", year: "numeric" })} to ${fmtDay(to, { day: "numeric", month: "short", year: "numeric" })}`;
 
 export const avgText = (v: number | null, unit: string, dp = 0) => (v == null ? "no data" : `${fmtNum(v, dp)} ${unit}`);
+
+/** Axis-friendly number: 8400 → "8.4k". */
+export const compactNum = (v: number) => (Math.abs(v) >= 10000 ? `${Math.round(v / 1000)}k` : Math.abs(v) >= 1000 ? `${Math.round(v / 100) / 10}k` : String(Math.round(v * 10) / 10));
+
+/** Signed delta as text: "+0.4", "−1.2", "0". */
+export const signed = (n: number, dp = 1) => {
+  const r = Math.round(n * 10 ** dp) / 10 ** dp;
+  return `${r > 0 ? "+" : r < 0 ? "−" : ""}${fmtNum(Math.abs(r), dp)}`;
+};

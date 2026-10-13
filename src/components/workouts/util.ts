@@ -33,3 +33,20 @@ export function formatSets(sets: SetResultDto[], u: UnitSystem): string {
 export const previousLine = (prev: { date: string; sets: SetResultDto[] }, u: UnitSystem) => `${formatSets(prev.sets, u)} (${fmtDay(prev.date)})`;
 
 export const MUSCLE_LABEL = (m: string) => m.charAt(0).toUpperCase() + m.slice(1);
+
+/**
+ * Muscle-group dot colour. Only fixed brand tokens (never the metric series colours, which mean calories/protein/steps...).
+ * The dot is decoration: the muscle name is always written next to it.
+ */
+export function muscleDot(muscle: string): string {
+  const m = muscle.toLowerCase();
+  if (/(quad|hamstring|glute|calf|calves|leg)/.test(m)) return "rgb(var(--brand-a))";
+  if (/(chest|shoulder|delt|tricep)/.test(m)) return "rgb(var(--brand-b))";
+  if (/(back|lat|bicep|trap)/.test(m)) return "rgb(var(--brand))";
+  return "rgb(var(--muted))";
+}
+
+export const mmss = (s: number) => `${Math.floor(s / 60)}:${String(s % 60).padStart(2, "0")}`;
+
+/** Reps in reserve for an RPE, as short text ("2 RIR", "0 RIR"). */
+export const rirShort = (rpe: number) => `${Math.max(0, 10 - rpe)} RIR`;

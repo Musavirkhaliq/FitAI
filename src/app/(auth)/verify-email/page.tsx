@@ -2,9 +2,10 @@
 import Link from "next/link";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useEffect, useState } from "react";
-import { CheckCircle2, AlertCircle, Mail, ArrowRight } from "lucide-react";
+import { Mail, ArrowRight } from "lucide-react";
 import { Field, Spinner } from "@/components/ui";
 import { ApiError, post } from "@/lib/client/api";
+import { AuthError } from "../_components/parts";
 
 function VerifyEmailContent() {
   const searchParams = useSearchParams();
@@ -77,25 +78,27 @@ function VerifyEmailContent() {
   };
 
   return (
-    <div className="card space-y-5" aria-labelledby="verify-h">
+    <div className="card glass rise space-y-5 !p-5 shadow-float sm:!p-6" aria-labelledby="verify-h" style={{ ["--i" as string]: 1 }}>
       {status === "verifying" && (
-        <div className="flex flex-col items-center py-6 text-center space-y-3">
+        <div className="flex flex-col items-center space-y-3 py-6 text-center">
           <Spinner label="Verifying email" />
-          <h1 id="verify-h" className="text-xl font-semibold">Verifying your email</h1>
+          <h1 id="verify-h" className="display text-2xl font-extrabold">Verifying your email</h1>
           <p className="text-sm text-muted">Please wait while we confirm your email address…</p>
         </div>
       )}
 
       {status === "success" && (
-        <div className="space-y-4 text-center py-2">
-          <div className="mx-auto flex h-12 w-12 items-center justify-center rounded-full bg-good/15 text-good">
-            <CheckCircle2 className="h-7 w-7" aria-hidden />
+        <div className="space-y-5 py-2 text-center">
+          <div className="grad-brand mx-auto flex h-16 w-16 items-center justify-center rounded-full text-brand-fg pop" style={{ boxShadow: "var(--shadow-float), 0 0 36px -4px rgb(var(--brand-a) / 0.5)" }}>
+            <svg viewBox="0 0 24 24" className="h-8 w-8" fill="none" stroke="currentColor" strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" aria-hidden>
+              <path d="M5 13l4 4L19 7" strokeDasharray="24" className="animate-check-draw" />
+            </svg>
           </div>
           <div>
-            <h1 id="verify-h" className="text-xl font-semibold text-fg">Email verified!</h1>
+            <h1 id="verify-h" className="display text-2xl font-extrabold">Email verified!</h1>
             <p className="mt-1 text-sm text-muted">{message}</p>
           </div>
-          <Link href="/login" className="btn btn-primary w-full inline-flex items-center justify-center gap-2">
+          <Link href="/login" className="btn btn-primary w-full !min-h-[52px] !text-base">
             <span>Continue to sign in</span>
             <ArrowRight className="h-4 w-4" aria-hidden />
           </Link>
@@ -104,45 +107,41 @@ function VerifyEmailContent() {
 
       {(status === "idle" || status === "error") && (
         <>
-          <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl bg-brand/15 text-brand">
-              <Mail className="h-5 w-5" aria-hidden />
+          <div className="flex items-center gap-3.5">
+            <div className="grad-brand flex h-12 w-12 shrink-0 items-center justify-center rounded-2xl text-brand-fg" style={{ boxShadow: "var(--shadow-tile), 0 0 24px -6px rgb(var(--brand-a) / 0.5)" }}>
+              <Mail className="h-6 w-6" aria-hidden />
             </div>
-            <div>
-              <h1 id="verify-h" className="text-xl font-semibold">Check your email</h1>
-              <p className="text-xs text-muted">We sent a verification link to your email</p>
+            <div className="min-w-0">
+              <h1 id="verify-h" className="display text-2xl font-extrabold leading-tight">Check your email</h1>
+              <p className="text-sm text-muted">We sent a verification link to your email</p>
             </div>
           </div>
 
-          {status === "error" && (
-            <div role="alert" className="flex items-start gap-2.5 rounded-xl border border-bad/30 bg-bad/10 p-3.5 text-sm text-bad">
-              <AlertCircle className="mt-0.5 h-4 w-4 shrink-0" aria-hidden />
-              <span>{message}</span>
-            </div>
-          )}
+          {status === "error" && message && <AuthError message={message} />}
 
-          <p className="text-sm text-muted leading-relaxed">
-            Please check your inbox and click the verification link to activate your FitTrack AI account. If you don&apos;t see it, be sure to check your spam or junk folder.
+          <p className="text-sm leading-relaxed text-muted">
+            Please check your inbox and click the verification link to activate your SukoonFit account. If you don&apos;t see it, be sure to check your spam or junk folder.
           </p>
 
           {simulatedToken && (
-            <div className="rounded-xl border border-border bg-surface-2 p-3 text-xs space-y-1">
+            <div className="space-y-1 rounded-2xl border border-border bg-surface-2 p-3.5 text-xs">
               <p className="font-semibold text-brand">Development Mode Verification Link:</p>
               <Link
                 href={`/verify-email?token=${simulatedToken}&email=${encodeURIComponent(email)}`}
-                className="block text-brand underline break-all"
+                className="block break-all py-1 text-brand underline"
               >
                 Click here to verify instantly ({email})
               </Link>
             </div>
           )}
 
-          <form onSubmit={handleResend} className="border-t border-border pt-4 space-y-3">
-            <h2 className="text-sm font-semibold">Need a new link?</h2>
+          <form onSubmit={handleResend} className="space-y-3 border-t border-border pt-5">
+            <h2 className="display text-base font-bold">Need a new link?</h2>
             <Field label="Email" htmlFor="resend-email">
               <input
                 id="resend-email"
                 type="email"
+                inputMode="email"
                 required
                 className="input"
                 value={email}
@@ -151,16 +150,16 @@ function VerifyEmailContent() {
               />
             </Field>
 
-            {resendMessage && <p className="text-xs text-good">{resendMessage}</p>}
-            {resendError && <p className="text-xs text-bad">{resendError}</p>}
+            {resendMessage && <p role="status" className="text-sm text-good">{resendMessage}</p>}
+            {resendError && <AuthError message={resendError} />}
 
-            <button type="submit" className="btn w-full" disabled={resending}>
+            <button type="submit" className="btn w-full !min-h-[52px]" disabled={resending}>
               {resending ? <Spinner label="Sending verification email" /> : "Resend verification email"}
             </button>
           </form>
 
-          <p className="text-center text-sm text-muted pt-2">
-            Ready to sign in? <Link href="/login" className="font-medium text-brand underline">Back to login</Link>
+          <p className="pt-1 text-center text-sm text-muted">
+            Ready to sign in? <Link href="/login" className="inline-flex min-h-[44px] items-center font-semibold text-brand underline">Back to login</Link>
           </p>
         </>
       )}
@@ -170,7 +169,7 @@ function VerifyEmailContent() {
 
 export default function VerifyEmailPage() {
   return (
-    <Suspense fallback={<div className="card text-center py-8"><Spinner label="Loading" /></div>}>
+    <Suspense fallback={<div className="card glass flex justify-center py-10"><Spinner label="Loading" /></div>}>
       <VerifyEmailContent />
     </Suspense>
   );

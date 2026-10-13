@@ -1,31 +1,34 @@
 "use client";
-import { Mic } from "lucide-react";
 import { usePathname } from "next/navigation";
 import { Sheet } from "@/components/ui";
 import { useCoach } from "./CoachProvider";
 import { MessageList, SafetyFooter } from "./Messages";
+import { VoiceOrb } from "./VoiceOrb";
 import { VoicePanel } from "./VoicePanel";
 
-/** Floating mic on every screen (except those with their own voice surface) + the sheet it opens. */
+/** Docked orb on every screen (except those with their own voice surface) + the sheet it opens. */
 export function VoiceSheet() {
   const c = useCoach();
   const path = usePathname();
-  // Screens with their own voice surface hide the floating mic; everywhere else (incl. Today) it stays one tap away.
-  const hideFab = path.startsWith("/coach") || path.startsWith("/workouts/session");
+  // Screens with their own voice surface hide the floating orb; everywhere else (incl. Today) it stays one tap away.
+  const hideFab = path.startsWith("/coach") || path.startsWith("/workouts/session") || path === "/onboarding";
   const recent = c.messages.slice(-4);
   return (
     <>
       {!hideFab && (
-        <button
-          onClick={() => {
-            c.openSheet();
-            if (c.voiceState === "idle") void c.listen();
-          }}
-          aria-label="Talk to your coach"
-          className="fixed bottom-[4.75rem] right-4 z-40 flex h-16 w-16 items-center justify-center rounded-full bg-brand text-brand-fg shadow-lg shadow-brand/30 transition-transform hover:scale-105 active:scale-95 md:bottom-6 md:right-6"
-        >
-          <Mic className="h-7 w-7" aria-hidden />
-        </button>
+        // Right-hand thumb zone, just above the tab bar. The wrapper ignores pointer events so ripples never block taps.
+        <div className="pointer-events-none fixed bottom-[calc(max(0.75rem,env(safe-area-inset-bottom))+4.6rem)] right-1 z-40 md:bottom-4 md:right-4">
+          <VoiceOrb
+            state={c.voiceState}
+            size={58}
+            hasError={!!c.voiceError}
+            label="Talk to your coach"
+            onClick={() => {
+              c.openSheet();
+              if (c.voiceState === "idle") void c.listen();
+            }}
+          />
+        </div>
       )}
       <Sheet open={c.sheetOpen} onClose={c.closeSheet} title="Talk to your coach">
         <div className="space-y-4">

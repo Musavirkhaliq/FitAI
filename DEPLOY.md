@@ -51,7 +51,7 @@ Restart the process, then check, in a private window:
 
 ## 4. Optional: row-level security (Supabase only)
 
-Supabase also exposes every `public` table through its REST API. FitTrack never uses that API for data, so enabling RLS with no
+Supabase also exposes every `public` table through its REST API. SukoonFit never uses that API for data, so enabling RLS with no
 policies shuts that door entirely. The app is unaffected **as long as it connects as the role that owns the tables** (on Supabase,
 `postgres`), because owners bypass RLS.
 

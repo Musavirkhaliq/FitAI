@@ -1,7 +1,8 @@
 "use client";
-import { BarChart3 } from "lucide-react";
+import { BarChart3, ChevronRight, Sparkles } from "lucide-react";
+import Link from "next/link";
 import { useState } from "react";
-import { DriverChart, type DriverKey } from "@/components/analytics/DriverChart";
+import { HabitsVsWeightChart } from "@/components/analytics/DriverChart";
 import { AdherenceTiles, CorrelationPanel, PrList } from "@/components/analytics/Insights";
 import { presetRange, RangePicker, type Range } from "@/components/analytics/RangePicker";
 import { FrequencyStrengthChart, StrengthChart, VolumeChart } from "@/components/analytics/TrainingCharts";
@@ -9,13 +10,22 @@ import type { AnalyticsDto, Granularity } from "@/components/analytics/types";
 import { fmtRange } from "@/components/analytics/util";
 import { WaistChart, WeightTrendChart } from "@/components/analytics/WeightCharts";
 import type { ProfileDto, WorkoutsDto } from "@/components/workouts/types";
-import { EmptyState, ErrorState, Field, LoadingBlock, Notice, PageHeader, Segmented } from "@/components/ui";
+import { EmptyState, ErrorState, Field, Notice, PageHeader, Segmented, Skeleton, haptic } from "@/components/ui";
 import { useApi } from "@/lib/client/api";
 import { todayLocal } from "@/lib/client/format";
 import { daysBetween } from "@/lib/dates";
 
-const DRIVERS: DriverKey[] = ["calories", "protein", "steps", "sleep"];
-const CORR_KEY = { calories: "caloriesVsWeightChange", protein: "proteinVsWeightChange", steps: "stepsVsWeightChange", sleep: "sleepVsWeightChange" } as const;
+/** Skeleton shaped like the final layout. */
+function AnalyticsSkeleton() {
+  return (
+    <div role="status" aria-live="polite" className="space-y-4">
+      <span className="sr-only">Crunching your numbers…</span>
+      <Skeleton className="h-36" />
+      <Skeleton className="h-72" />
+      <div className="grid grid-cols-2 gap-3"><Skeleton className="h-44" /><Skeleton className="h-44" /></div>
+    </div>
+  );
+}
 
 export default function AnalyticsPage() {
   const [today] = useState(todayLocal);
@@ -31,10 +41,10 @@ export default function AnalyticsPage() {
   const picker = <RangePicker range={range} today={today} onChange={setRange} />;
   const head = <PageHeader title="Analytics" subtitle={data ? `${fmtRange(data.from, data.to)}. Trends over time, not single days.` : "Trends over time, not single days."} />;
 
-  if (loading && !data) return <div className="space-y-5">{head}{picker}<LoadingBlock label="Crunching your numbers" rows={4} /></div>;
+  if (loading && !data) return <div className="space-y-4">{head}{picker}<AnalyticsSkeleton /></div>;
   if (!data) {
     return (
-      <div className="space-y-5">
+      <div className="space-y-4">
         {head}
         {picker}
         <ErrorState message={error ?? "I couldn't load your analytics. Check your connection."} onRetry={() => void refresh()} />
@@ -54,7 +64,22 @@ export default function AnalyticsPage() {
   return (
     <div className="space-y-6">
       {head}
-      {picker}
+      <div className="-mt-2 space-y-3">
+        {picker}
+        <Link
+          href="/recap"
+          onClick={() => haptic()}
+          className="press rise flex min-h-[64px] items-center gap-3 rounded-[1.5rem] border border-brand/30 px-4"
+          style={{ background: "linear-gradient(135deg, rgb(var(--brand-a) / 0.16), rgb(var(--brand-b) / 0.06)), rgb(var(--surface))", ["--i" as string]: 1 }}
+        >
+          <span aria-hidden className="flex h-10 w-10 shrink-0 items-center justify-center rounded-full text-brand-fg" style={{ background: "var(--btn-bg)" }}><Sparkles className="h-5 w-5" /></span>
+          <span className="min-w-0 flex-1">
+            <span className="display block font-bold leading-tight">Your week, wrapped</span>
+            <span className="block text-sm text-muted">A quick story of the last 7 days</span>
+          </span>
+          <ChevronRight className="h-5 w-5 text-muted" aria-hidden />
+        </Link>
+      </div>
       {error && <Notice tone="warn">{error}</Notice>}
 
       {!hasAny ? (
@@ -69,33 +94,31 @@ export default function AnalyticsPage() {
           <AdherenceTiles adherence={data.adherence} />
 
           <section className="space-y-3" aria-labelledby="drv-h">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 id="drv-h" className="text-lg font-semibold">Habits vs weight</h2>
-                <p className="text-sm text-muted">Bars show the habit, the line shows your 7-day average weight on the right-hand axis.</p>
+            <div className="rise flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0">
+                <h2 id="drv-h" className="display text-xl font-extrabold">Habits and weight</h2>
+                <p className="text-sm text-muted">Each habit has its own panel on a shared timeline, so nothing is squeezed onto a second axis.</p>
               </div>
               <Segmented label="Chart detail" value={gran} onChange={setGranPick} options={[{ value: "daily", label: "Daily" }, { value: "weekly", label: "Weekly" }]} />
             </div>
-            <div className="grid gap-4 lg:grid-cols-2">
-              {DRIVERS.map((k) => (
-                <DriverChart key={k} metricKey={k} gran={gran} days={data.days} weekly={data.weekly} weightSeries={data.weightSeries} units={units} correlation={data.correlations[CORR_KEY[k]]} />
-              ))}
-            </div>
+            <HabitsVsWeightChart gran={gran} days={data.days} weekly={data.weekly} weightSeries={data.weightSeries} units={units} targets={data.targets} correlations={data.correlations} />
             <CorrelationPanel c={data.correlations} />
           </section>
 
           <section className="space-y-3" aria-labelledby="str-h">
-            <div className="flex flex-wrap items-end justify-between gap-3">
-              <div>
-                <h2 id="str-h" className="text-lg font-semibold">Training and strength</h2>
+            <div className="rise flex flex-wrap items-end justify-between gap-3">
+              <div className="min-w-0">
+                <h2 id="str-h" className="display text-xl font-extrabold">Training and strength</h2>
                 <p className="text-sm text-muted">Strength is estimated from your logged sets.</p>
               </div>
               {data.strength.length > 0 && exercise && (
-                <Field label="Exercise" htmlFor="ex-pick">
-                  <select id="ex-pick" className="input" value={exercise} onChange={(e) => setExPick(e.target.value)}>
-                    {data.strength.map((s) => <option key={s.exercise} value={s.exercise}>{s.exercise}</option>)}
-                  </select>
-                </Field>
+                <div className="w-full sm:w-64">
+                  <Field label="Exercise" htmlFor="ex-pick">
+                    <select id="ex-pick" className="input" value={exercise} onChange={(e) => setExPick(e.target.value)}>
+                      {data.strength.map((s) => <option key={s.exercise} value={s.exercise}>{s.exercise}</option>)}
+                    </select>
+                  </Field>
+                </div>
               )}
             </div>
             <div className="grid gap-4 lg:grid-cols-2">

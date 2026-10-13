@@ -1,11 +1,12 @@
 "use client";
-import { ArrowLeft, Plus } from "lucide-react";
+import { ArrowLeft, Brain, Plus } from "lucide-react";
 import Link from "next/link";
-import { useMemo, useState } from "react";
+import { useCallback, useMemo, useState } from "react";
 import { AddMemoryForm } from "@/components/settings/AddMemoryForm";
-import { CATEGORIES, MemoryItem } from "@/components/settings/MemoryItem";
+import { IconTile } from "@/components/settings/common";
+import { CATEGORIES, CATEGORY_META, MemoryItem } from "@/components/settings/MemoryItem";
 import type { MemoryDto } from "@/components/settings/types";
-import { EmptyState, ErrorState, LoadingBlock, Notice, PageHeader } from "@/components/ui";
+import { clsx, EmptyState, ErrorState, LoadingBlock, Notice, PageHeader, Sheet } from "@/components/ui";
 import { useApi } from "@/lib/client/api";
 
 const EXAMPLES = [
@@ -18,6 +19,7 @@ const EXAMPLES = [
 export default function MemoryPage() {
   const { data, error, loading, refresh, setData } = useApi<{ memories: MemoryDto[] }>("/api/memory");
   const [adding, setAdding] = useState(false);
+  const closeAdd = useCallback(() => setAdding(false), []);
 
   const groups = useMemo(() => {
     const list = data?.memories ?? [];
@@ -30,40 +32,62 @@ export default function MemoryPage() {
   const replace = (m: MemoryDto) => setData((prev) => (prev ? { memories: prev.memories.map((x) => (x.id === m.id ? m : x)) } : prev));
   const remove = (id: string) => setData((prev) => (prev ? { memories: prev.memories.filter((x) => x.id !== id) } : prev));
 
+  const addButton = (
+    <button className="btn btn-primary" onClick={() => setAdding(true)} aria-haspopup="dialog"><Plus className="h-4 w-4" aria-hidden /> Add a memory</button>
+  );
+
   return (
-    <div className="mx-auto max-w-3xl space-y-5">
-      <Link href="/settings" className="inline-flex min-h-[44px] items-center gap-1 text-sm text-brand underline"><ArrowLeft className="h-4 w-4" aria-hidden /> Back to settings</Link>
+    <>
+    <div className="mx-auto max-w-2xl space-y-6">
+      <div>
+        <Link href="/settings" className="chip"><ArrowLeft className="h-4 w-4" aria-hidden /> Back to settings</Link>
+      </div>
       <PageHeader
         title="What your coach remembers"
         subtitle="Your coach uses these notes to personalise its answers. If you've said you usually eat bone-in chicken, it won't keep asking. You can add, correct or delete anything here at any time."
-        actions={!adding && <button className="btn btn-primary" onClick={() => setAdding(true)}><Plus className="h-4 w-4" aria-hidden /> Add a memory</button>}
+        actions={groups.length > 0 ? addButton : undefined}
       />
       {error && <Notice tone="warn">{error}</Notice>}
 
-      {adding && <AddMemoryForm onCancel={() => setAdding(false)} onAdded={() => { setAdding(false); void refresh(); }} />}
-
       {groups.length === 0 ? (
         <EmptyState
+          icon={<Brain className="h-7 w-7" />}
           title="Nothing remembered yet"
           body="As you chat, your coach notes useful things. You can also tell it directly, with phrases like:"
           action={
-            <ul className="space-y-1 text-left text-sm">
-              {EXAMPLES.map((x) => <li key={x}>“{x}”</li>)}
-            </ul>
+            <div className="flex flex-col items-center gap-4">
+              <ul className="flex flex-wrap justify-center gap-2 text-left text-sm">
+                {EXAMPLES.map((x) => <li key={x} className="rounded-2xl bg-surface-2 px-3.5 py-2 italic">“{x}”</li>)}
+              </ul>
+              {addButton}
+            </div>
           }
         />
       ) : (
-        groups.map((g) => (
-          <section key={g.value} className="card" aria-labelledby={`cat-${g.value}`}>
-            <h2 id={`cat-${g.value}`} className="text-lg font-semibold">{g.label}</h2>
-            <ul className="mt-1 divide-y divide-border">
-              {g.items.map((m) => <MemoryItem key={m.id} memory={m} onChanged={replace} onDeleted={remove} />)}
-            </ul>
-          </section>
-        ))
+        groups.map((g, i) => {
+          const meta = CATEGORY_META[g.value];
+          return (
+            <section key={g.value} className="rise" aria-labelledby={`cat-${g.value}`} style={{ ["--i" as string]: Math.min(i, 6) }}>
+              <h2 id={`cat-${g.value}`} className={clsx("mb-3 flex items-center gap-2.5 rounded-2xl px-3 py-2 text-base font-extrabold display", meta.head)}>
+                <IconTile icon={meta.icon} tint={meta.tint} />
+                {g.label}
+                <span className="ml-auto text-xs font-semibold text-muted"><span className="sr-only">{g.items.length} notes</span><span aria-hidden>{g.items.length}</span></span>
+              </h2>
+              <ul className="space-y-3">
+                {g.items.map((m) => <MemoryItem key={m.id} memory={m} onChanged={replace} onDeleted={remove} />)}
+              </ul>
+            </section>
+          );
+        })
       )}
 
-      <p className="text-xs text-muted">Inferred notes are guesses from your conversations, so correct any that are wrong. Memories are only used to help your coach, never as medical advice.</p>
+      <p className="px-1 text-xs leading-relaxed text-muted">Inferred notes are guesses from your conversations, so correct any that are wrong. Memories are only used to help your coach, never as medical advice.</p>
+
     </div>
+
+    <Sheet open={adding} onClose={closeAdd} title="Add a memory">
+      <AddMemoryForm onCancel={closeAdd} onAdded={() => { setAdding(false); void refresh(); }} />
+    </Sheet>
+    </>
   );
 }

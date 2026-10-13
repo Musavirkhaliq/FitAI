@@ -1,14 +1,14 @@
 "use client";
-import { Trash2 } from "lucide-react";
-import { useState } from "react";
-import { Notice } from "@/components/ui";
+import { Ruler, Trash2 } from "lucide-react";
+import { useCallback, useState } from "react";
+import { Notice, Sheet } from "@/components/ui";
 import { fmtDay, fmtNum, type UnitSystem } from "@/lib/client/format";
 import { BodyFatEstimate } from "./BodyFatEstimate";
 import { MeasurementForm } from "./MeasurementForm";
 import { WaistChart } from "./WaistChart";
 import type { MeasurementDto, WeightDto } from "./types";
 
-/** Optional body-composition section: estimate (ranges), tape measurements form, waist trend, recent readings. */
+/** Optional body-composition section: estimate (ranges), waist trend, recent readings; the tape-measure form opens in a sheet. */
 export function BodyComposition({
   data, units, sex, onAdded, onRemove,
 }: {
@@ -16,6 +16,9 @@ export function BodyComposition({
   onAdded: (m: Omit<MeasurementDto, "id" | "notes">) => void; onRemove: (id: string) => Promise<void>;
 }) {
   const [err, setErr] = useState<string | null>(null);
+  const [open, setOpen] = useState(false);
+  const [saved, setSaved] = useState<{ tone: "good" | "warn"; text: string } | null>(null);
+  const close = useCallback(() => setOpen(false), []);
   const recent = [...data.measurements].reverse().slice(0, 5);
 
   const remove = async (id: string) => {
@@ -28,17 +31,23 @@ export function BodyComposition({
   };
 
   return (
-    <section className="card space-y-5" aria-labelledby="bc-h">
-      <div>
-        <h2 id="bc-h" className="text-sm font-semibold">Body composition (optional)</h2>
-        <p className="text-xs text-muted">Tape measurements give a rough estimate. Waist change over time is often more useful than any single number. Progress photos can be added later.</p>
+    <>
+    <section className="card rise space-y-4" aria-labelledby="bc-h">
+      <div className="flex items-start justify-between gap-3">
+        <div className="min-w-0">
+          <h2 id="bc-h" className="display text-lg font-extrabold">Body composition</h2>
+          <p className="mt-1 text-sm text-muted">Optional. Tape measurements give a rough estimate; waist change over time is often more useful than any single number.</p>
+        </div>
+        <button className="btn shrink-0" onClick={() => { setSaved(null); setOpen(true); }}>
+          <Ruler className="h-4 w-4" aria-hidden /> Add
+        </button>
       </div>
+      <div aria-live="polite">{saved && <Notice tone={saved.tone}>{saved.text}</Notice>}</div>
       <BodyFatEstimate bodyFat={data.bodyFat} date={data.bodyFatDate} fatLost={data.fatLostEstimate} units={units} />
       <WaistChart measurements={data.measurements} />
-      <MeasurementForm showHip={sex !== "MALE"} onSaved={onAdded} />
       {recent.length > 0 && (
         <div>
-          <h3 className="mb-1 text-sm font-semibold">Recent measurements</h3>
+          <h3 className="eyebrow mb-1">Recent measurements</h3>
           <ul className="divide-y divide-border">
             {recent.map((m) => {
               const parts = [
@@ -53,7 +62,7 @@ export function BodyComposition({
                     <p className="font-medium">{fmtDay(m.date)}</p>
                     <p className="text-xs text-muted">{parts.join(" · ")}</p>
                   </div>
-                  <button className="btn btn-ghost !min-w-[44px] !px-2" disabled={m.id.startsWith("tmp-")} onClick={() => void remove(m.id)} aria-label={`Delete measurements from ${fmtDay(m.date)}`}>
+                  <button className="btn btn-ghost !min-h-[48px] !min-w-[48px] !px-2" disabled={m.id.startsWith("tmp-")} onClick={() => void remove(m.id)} aria-label={`Delete measurements from ${fmtDay(m.date)}`}>
                     <Trash2 className="h-4 w-4" aria-hidden />
                   </button>
                 </li>
@@ -63,6 +72,18 @@ export function BodyComposition({
         </div>
       )}
       <div aria-live="polite">{err && <Notice tone="warn">{err}</Notice>}</div>
+
     </section>
+      <Sheet open={open} onClose={close} title="Log measurements">
+        <MeasurementForm
+          showHip={sex !== "MALE"}
+          onSaved={(m, queued) => {
+            onAdded(m);
+            setSaved(queued ? { tone: "warn", text: "You're offline. Your measurements are queued and will sync later." } : { tone: "good", text: "Measurements saved." });
+            setOpen(false);
+          }}
+        />
+      </Sheet>
+    </>
   );
 }

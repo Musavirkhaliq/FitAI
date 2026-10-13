@@ -9,8 +9,8 @@ const STATUS_TEXT = { COMPLETED: "Completed", IN_PROGRESS: "In progress", SKIPPE
 export function RecentSessions({ sessions, units }: { sessions: SessionRowDto[]; units: UnitSystem }) {
   const rows = sessions.filter((s) => s.status !== "SKIPPED" || s.sets.length > 0).slice(0, 10);
   return (
-    <section className="card" aria-labelledby="recent-h">
-      <h2 id="recent-h" className="text-sm font-semibold">Recent sessions</h2>
+    <section className="card rise" aria-labelledby="recent-h">
+      <h2 id="recent-h" className="display text-lg font-extrabold">Recent sessions</h2>
       {rows.length === 0 ? (
         <p className="mt-3 text-sm text-muted">No sessions yet. Your first one will appear here.</p>
       ) : (
@@ -18,16 +18,20 @@ export function RecentSessions({ sessions, units }: { sessions: SessionRowDto[];
           {rows.map((s) => {
             const volume = s.sets.reduce((t, x) => t + x.volume, 0);
             return (
-              <li key={s.id} className="flex flex-wrap items-center justify-between gap-x-3 gap-y-1 py-3">
-                <div>
-                  <p className="font-medium">{s.day?.name ?? "Workout"}</p>
-                  <p className="text-sm text-muted">{fmtDay(s.date)}</p>
-                </div>
-                <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-sm tabular-nums text-muted">
-                  <span>{s.sets.length} sets</span>
-                  <span>{fmtWeight(volume, units, 0)} total</span>
-                  <span>{s.durationMin != null ? `${fmtNum(s.durationMin)} min` : "—"}</span>
-                  <Badge tone={STATUS_TONE[s.status]}>{STATUS_TEXT[s.status]}</Badge>
+              <li key={s.id} className="flex items-center gap-3 py-3">
+                <span aria-hidden className="flex h-12 w-12 shrink-0 flex-col items-center justify-center rounded-2xl bg-surface-2 leading-none">
+                  <span className="num text-lg">{fmtDay(s.date, { day: "numeric" })}</span>
+                  <span className="mt-0.5 text-[10px] font-semibold uppercase text-muted">{fmtDay(s.date, { month: "short" })}</span>
+                </span>
+                <div className="min-w-0 flex-1">
+                  <p className="flex flex-wrap items-center gap-x-2 gap-y-1">
+                    <span className="font-semibold">{s.day?.name ?? "Workout"}</span>
+                    <Badge tone={STATUS_TONE[s.status]}>{STATUS_TEXT[s.status]}</Badge>
+                  </p>
+                  <p className="text-sm tabular-nums text-muted">
+                    <span className="sr-only">{fmtDay(s.date)}. </span>
+                    {s.sets.length} sets · {fmtWeight(volume, units, 0)} total · {s.durationMin != null ? `${fmtNum(s.durationMin)} min` : "—"}
+                  </p>
                 </div>
               </li>
             );
