@@ -1,10 +1,12 @@
 "use client";
-import { ChevronLeft, ChevronRight, Droplets, Flame, Footprints, Plus, Sigma, Sun, Utensils } from "lucide-react";
+import { ChevronLeft, ChevronRight, Droplets, Flame, Footprints, Plus, Sigma, Sparkles, Sun, Utensils } from "lucide-react";
 import { useSearchParams } from "next/navigation";
 import { Suspense, useCallback, useEffect, useState, type ReactNode } from "react";
 import { AddFoodSheet } from "@/components/nutrition/AddFoodSheet";
 import { guessMeal, isDay, normalizeMeals, scaleEntry, shiftDay, withEntries } from "@/components/nutrition/dayMath";
 import { FoodEntryRow, type EntryPatch } from "@/components/nutrition/FoodEntryRow";
+import { MicrosPanel } from "@/components/nutrition/MicrosPanel";
+import { ProduceStepper } from "@/components/nutrition/ProduceStepper";
 import { ErrorState, LoadingBlock, MetricCard, Notice, PageHeader } from "@/components/ui";
 import { logTool, useApi } from "@/lib/client/api";
 import { fmtDay, fmtNum, fmtWeight, MEAL_LABEL, todayLocal } from "@/lib/client/format";
@@ -96,9 +98,11 @@ function NutritionView() {
     return run(() => logTool("log_water", { date, ml }), `Added ${ml} ml of water.`);
   };
 
-  const addProduce = (kind: "veg" | "fruit") => {
-    setData((prev) => prev && (kind === "veg" ? { ...prev, vegServings: prev.vegServings + 1 } : { ...prev, fruitServings: prev.fruitServings + 1 }));
-    return run(() => logTool("log_produce", { date, [kind === "veg" ? "vegServings" : "fruitServings"]: 1 }), `Added a serving of ${kind === "veg" ? "vegetables" : "fruit"}.`);
+  const addProduce = (kind: "veg" | "fruit", delta: 1 | -1) => {
+    const bump = (n: number) => Math.max(0, Math.round((n + delta) * 10) / 10);
+    setData((prev) => prev && (kind === "veg" ? { ...prev, vegServings: bump(prev.vegServings) } : { ...prev, fruitServings: bump(prev.fruitServings) }));
+    const what = kind === "veg" ? "vegetables" : "fruit";
+    return run(() => logTool("log_produce", { date, [kind === "veg" ? "vegServings" : "fruitServings"]: delta }), delta > 0 ? `Added a serving of ${what}.` : `Removed a serving of ${what}.`);
   };
 
   if (!date) return <LoadingBlock label="Loading nutrition" rows={4} />;
@@ -132,7 +136,7 @@ function NutritionView() {
       {!ready ? (
         error ? <ErrorState message={error} onRetry={() => void refresh()} /> : <LoadingBlock label="Loading this day" rows={4} />
       ) : (
-        <DayTimeline s={ready} units={units} onAdd={openAdd} onDelete={removeEntry} onEdit={editEntry} onWater={addWater} onProduce={addProduce} />
+        <DayTimeline s={ready} units={units} isToday={date === today} onAdd={openAdd} onDelete={removeEntry} onEdit={editEntry} onWater={addWater} onProduce={addProduce} />
       )}
 
       {dq && (
@@ -151,14 +155,15 @@ function NutritionView() {
   );
 }
 
-function DayTimeline({ s, units, onAdd, onDelete, onEdit, onWater, onProduce }: {
+function DayTimeline({ s, units, isToday, onAdd, onDelete, onEdit, onWater, onProduce }: {
   s: DaySummaryDto;
   units: "METRIC" | "IMPERIAL";
+  isToday: boolean;
   onAdd: (m: MealType) => void;
   onDelete: (id: string) => Promise<void>;
   onEdit: (id: string, patch: EntryPatch) => Promise<void>;
   onWater: (ml: number) => Promise<void>;
-  onProduce: (kind: "veg" | "fruit") => Promise<void>;
+  onProduce: (kind: "veg" | "fruit", delta: 1 | -1) => Promise<void>;
 }) {
   const t = s.targets;
   const kcal = Math.round(s.totals.calories);
@@ -227,6 +232,10 @@ function DayTimeline({ s, units, onAdd, onDelete, onEdit, onWater, onProduce }: 
         </div>
       </Step>
 
+      <Step icon={<Sparkles className="h-3.5 w-3.5" />} title="Vitamins & minerals (estimated)" aside={isToday ? <span className="text-xs text-muted">so far today</span> : undefined}>
+        <MicrosPanel s={s} isToday={isToday} />
+      </Step>
+
       <Step icon={<Flame className="h-3.5 w-3.5" />} title="Energy (estimates, not measurements)">
         {s.expenditure ? (
           <div className="space-y-2 text-sm">
@@ -250,20 +259,9 @@ function DayTimeline({ s, units, onAdd, onDelete, onEdit, onWater, onProduce }: 
             </div>
             <button className="btn" onClick={() => void onWater(250)}><Droplets className="h-4 w-4" aria-hidden /> +250 ml</button>
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs text-muted">Vegetable servings</p>
-              <p className="font-semibold tabular-nums">{fmtNum(s.vegServings, 1)}</p>
-            </div>
-            <button className="btn" onClick={() => void onProduce("veg")} aria-label="Add one vegetable serving"><Plus className="h-4 w-4" aria-hidden /> 1 serving</button>
-          </div>
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <p className="text-xs text-muted">Fruit servings</p>
-              <p className="font-semibold tabular-nums">{fmtNum(s.fruitServings, 1)}</p>
-            </div>
-            <button className="btn" onClick={() => void onProduce("fruit")} aria-label="Add one fruit serving"><Plus className="h-4 w-4" aria-hidden /> 1 serving</button>
-          </div>
+          <ProduceStepper label="Vegetable servings" noun="vegetable" value={s.vegServings} onChange={(d) => void onProduce("veg", d)} />
+          <ProduceStepper label="Fruit servings" noun="fruit" value={s.fruitServings} onChange={(d) => void onProduce("fruit", d)} />
+          <p className="text-xs text-muted">A rough guide: aim for roughly 200–300 g vegetables (2–3 servings) and 1–2 fruit servings a day. Tap − if you added one by mistake.</p>
         </div>
       </Step>
     </ol>

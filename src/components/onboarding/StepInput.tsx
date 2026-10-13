@@ -1,7 +1,9 @@
 "use client";
 import { ArrowRight } from "lucide-react";
-import { useId, type ReactNode } from "react";
+import { useId, useRef, type ReactNode } from "react";
 import { clsx } from "@/components/ui";
+import { DictateButton } from "./DictateButton";
+import { fromSpeech } from "./speech";
 import {
   ACTIVITY_OPTIONS, EQUIPMENT_OPTIONS, EXPERIENCE_OPTIONS, FOOD_EXAMPLES, GOAL_OPTIONS, MEAL_CHOICES, SEX_OPTIONS, SESSION_CHOICES,
   TRAIN_DAY_CHOICES, UNIT_OPTIONS, parseFoods, weightUnit, type Answers, type Option, type StepId,
@@ -69,6 +71,15 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
   const common = { "aria-labelledby": labelId, "aria-describedby": error ? errId : undefined, "aria-invalid": error ? true : undefined } as const;
   const nextLabel = last ? "See my plan" : "Next";
 
+  // Optional voice answer: fills the field live; the person still reviews and presses Next themselves.
+  const baseRef = useRef("");
+  const voice = (base = "") => (
+    <DictateButton
+      onStart={() => { baseRef.current = base; }}
+      onText={(text) => { const p = fromSpeech(id, text, a, baseRef.current); if (p) set(p); }}
+    />
+  );
+
   const next = (opts: { skip?: { label: string; patch: Partial<Answers> }; disabled?: boolean } = {}) => (
     <div className="mt-4 flex flex-wrap items-center gap-2">
       <button type="submit" className="btn btn-primary min-w-[120px]" disabled={opts.disabled}>
@@ -102,6 +113,7 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
       body = (
         <>
           <input {...common} className="input !min-h-[52px] text-lg" autoComplete="given-name" maxLength={80} value={a.name} onChange={(e) => set({ name: e.target.value })} />
+          {voice()}
           {next({ skip: { label: "Skip", patch: { name: "" } } })}
         </>
       );
@@ -110,6 +122,7 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
       body = (
         <>
           <input {...common} className="input !min-h-[52px] text-lg" inputMode="numeric" autoComplete="bday-year" maxLength={4} placeholder="YYYY" value={a.birthYear} onChange={(e) => set({ birthYear: e.target.value })} />
+          {voice()}
           {next()}
         </>
       );
@@ -121,11 +134,13 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
             <Suffix unit="ft"><input aria-label="Feet" className="input !min-h-[52px] text-lg" inputMode="numeric" value={a.heightFt} onChange={(e) => set({ heightFt: e.target.value })} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} /></Suffix>
             <Suffix unit="in"><input aria-label="Inches" className="input !min-h-[52px] text-lg" inputMode="decimal" value={a.heightIn} onChange={(e) => set({ heightIn: e.target.value })} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} /></Suffix>
           </div>
+          {voice()}
           {next()}
         </>
       ) : (
         <>
           <Suffix unit="cm"><input {...common} className="input !min-h-[52px] text-lg" inputMode="decimal" value={a.heightCm} onChange={(e) => set({ heightCm: e.target.value })} /></Suffix>
+          {voice()}
           {next()}
         </>
       );
@@ -134,6 +149,7 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
       body = (
         <>
           <Suffix unit={weightUnit(a.unitSystem)}><input {...common} className="input !min-h-[52px] text-lg" inputMode="decimal" value={a.weight} onChange={(e) => set({ weight: e.target.value })} /></Suffix>
+          {voice()}
           {next()}
         </>
       );
@@ -142,6 +158,7 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
       body = (
         <>
           <Suffix unit={weightUnit(a.unitSystem)}><input {...common} className="input !min-h-[52px] text-lg" inputMode="decimal" value={a.targetWeight} onChange={(e) => set({ targetWeight: e.target.value })} /></Suffix>
+          {voice()}
           {next({ skip: { label: "Skip, no target", patch: { targetWeight: "" } } })}
         </>
       );
@@ -161,6 +178,7 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
           <div className="mt-3 max-w-[200px]">
             <Suffix unit="minutes"><input aria-label="Or type your own, in minutes" className="input" inputMode="numeric" value={a.sessionMinutes} onChange={(e) => set({ sessionMinutes: e.target.value })} aria-invalid={error ? true : undefined} aria-describedby={error ? errId : undefined} /></Suffix>
           </div>
+          {voice()}
           {next()}
         </>
       );
@@ -169,6 +187,7 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
       body = (
         <>
           <textarea {...common} className="input min-h-[96px] py-2" rows={3} maxLength={300} value={a.injuries} onChange={(e) => set({ injuries: e.target.value })} />
+          {voice(a.injuries)}
           {next({ skip: { label: "None", patch: { injuries: "" } } })}
         </>
       );
@@ -183,6 +202,7 @@ export function StepInput({ id, answers: a, set, submit, error, labelId, last }:
       body = (
         <>
           <input {...common} className="input !min-h-[52px] text-lg" placeholder="Separate with commas" value={a.foods} onChange={(e) => set({ foods: e.target.value })} />
+          {voice(a.foods)}
           <div className="mt-3 flex flex-wrap gap-2" role="group" aria-label="Common examples">
             {FOOD_EXAMPLES.map((f) => {
               const on = current.includes(f.toLowerCase());

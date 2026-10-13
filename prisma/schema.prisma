@@ -97,6 +97,7 @@ model User {
   foodEntries      FoodEntry[]
   weightEntries    WeightEntry[]
   measurements     BodyMeasurement[]
+  photos           ProgressPhoto[]
   activityEntries  ActivityEntry[]
   sleepEntries     SleepEntry[]
   dailyLogs        DailyLog[]
@@ -316,6 +317,27 @@ model BodyMeasurement {
 
   @@index([userId, date])
   @@map("body_measurements")
+}
+
+/// Progress photos, stored in the database (client downsizes to ~1024 px JPEG first), so no object storage is needed.
+model ProgressPhoto {
+  id        String   @id @default(cuid())
+  userId    String   @map("user_id")
+  date      String
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  mime  String
+  bytes Bytes
+  size  Int
+  /// FRONT | SIDE | BACK | OTHER
+  pose  String  @default("FRONT")
+  notes String?
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, date])
+  @@map("progress_photos")
 }
 
 model ActivityEntry {

@@ -2,6 +2,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { notifyChanged } from "@/lib/client/api";
 import { enqueue, flushQueue, onQueueChange, queueSize, cacheFrequentFoods } from "@/lib/client/queue";
+import { speechRecognitionSupported, startDictation, type Dictation } from "@/lib/client/dictation";
 import { SentenceSpeaker } from "./speech";
 import { VoiceSession } from "./voiceEngine";
 
@@ -53,6 +54,8 @@ interface Ctx {
   queued: number;
   online: boolean;
   sheetOpen: boolean;
+  /** "browser" = the browser's own speech recognition is in use (no server transcription key). */
+  sttMode: "server" | "browser";
   openSheet: () => void;
   closeSheet: () => void;
   send: (text: string, source?: "VOICE" | "TEXT") => Promise<void>;
@@ -117,6 +120,11 @@ export function CoachProvider({ children, defaultTts = true }: { children: React
   const [queued, setQueued] = useState(0);
   const [online, setOnline] = useState(true);
   const [sheetOpen, setSheetOpen] = useState(false);
+  // "server": record and send to /api/stt. "browser": the browser's own recognition (no server key needed).
+  const [sttMode, setSttMode] = useState<"server" | "browser">("server");
+  const sttModeRef = useRef<"server" | "browser">("server");
+  const recogRef = useRef<Dictation | null>(null);
+  const noSpeechTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const stateRef = useRef<VoiceState>("idle");
   const setVoiceState = useCallback((s: VoiceState) => {
@@ -149,6 +157,15 @@ export function CoachProvider({ children, defaultTts = true }: { children: React
     const off = () => setOnline(false);
     window.addEventListener("online", on);
     window.addEventListener("offline", off);
+    // Pick the transcription path: the server when it has a provider, otherwise the browser's own recognition.
+    void fetch("/api/capabilities")
+      .then((r) => (r.ok ? r.json() : null))
+      .then((c: { stt?: boolean } | null) => {
+        const mode = c && c.stt === false && speechRecognitionSupported() ? "browser" : "server";
+        sttModeRef.current = mode;
+        setSttMode(mode);
+      })
+      .catch(() => null);
     void queueSize().then(setQueued);
     const unsub = onQueueChange(setQueued);
     void flushQueue();
@@ -337,8 +354,50 @@ export function CoachProvider({ children, defaultTts = true }: { children: React
     setConfidence(null);
     setAlternative(null);
     try {
-      if (!s.active) await s.open();
-      s.startRecording();
+      if (!s.active) await s.open(); // also drives the waveform
+      if (sttModeRef.current === "browser") {
+        recogRef.current?.abort();
+        const clearTimer = () => {
+          if (noSpeechTimer.current) clearTimeout(noSpeechTimer.current);
+          noSpeechTimer.current = null;
+        };
+        const d = startDictation({
+          onText: (text) => {
+            clearTimer();
+            setTranscript(text);
+          },
+          onEnd: (finalText, conf) => {
+            clearTimer();
+            recogRef.current = null;
+            if (!finalText) {
+              setVoiceError("I couldn't make out any words. Try again a little closer to the mic.");
+              setVoiceState("idle");
+              s.close();
+              return;
+            }
+            setTranscript(finalText);
+            setConfidence(conf);
+            setAlternative(null);
+            setVoiceState("preview");
+          },
+          onError: (msg) => {
+            clearTimer();
+            recogRef.current = null;
+            setVoiceError(msg);
+            setVoiceState("idle");
+            s.close();
+          },
+        });
+        if (!d) throw new Error("I couldn't start speech recognition. Type instead.");
+        recogRef.current = d;
+        // Same 10-second "Are you still there?" nudge as the recording path.
+        noSpeechTimer.current = setTimeout(() => {
+          setPrompt("Are you still there?");
+          speakerRef.current?.say("Are you still there?");
+        }, 10_000);
+      } else {
+        s.startRecording();
+      }
       setVoiceState("listening");
     } catch (e) {
       const msg = (e as Error).name === "NotAllowedError" ? "Microphone access was blocked. Allow it in your browser settings, or type instead." : (e as Error).message || "I couldn't start the microphone. Type instead.";
@@ -352,6 +411,12 @@ export function CoachProvider({ children, defaultTts = true }: { children: React
     const s = sessionRef.current!;
     if (stateRef.current !== "listening") return;
     setPrompt(null);
+    if (recogRef.current) {
+      // Browser recognition delivers its result through onEnd, which moves us to the preview.
+      setVoiceState("transcribing");
+      recogRef.current.stop();
+      return;
+    }
     setVoiceState("transcribing");
     const blob = await s.stopRecording();
     if (!blob) {
@@ -386,6 +451,9 @@ export function CoachProvider({ children, defaultTts = true }: { children: React
 
   const cancelVoice = useCallback(() => {
     speakerRef.current?.cancel();
+    recogRef.current?.abort();
+    recogRef.current = null;
+    if (noSpeechTimer.current) clearTimeout(noSpeechTimer.current);
     sessionRef.current?.close();
     setPrompt(null);
     setTranscript("");
@@ -423,10 +491,10 @@ export function CoachProvider({ children, defaultTts = true }: { children: React
 
   const value = useMemo<Ctx>(
     () => ({
-      messages, busy, stage, voiceState, voiceError, prompt, transcript, setTranscript, confidence, alternative, ttsOn, setTtsOn, liveDay, queued, online, sheetOpen,
+      messages, busy, stage, voiceState, voiceError, prompt, transcript, setTranscript, confidence, alternative, ttsOn, setTtsOn, liveDay, queued, online, sheetOpen, sttMode,
       openSheet: () => setSheetOpen(true), closeSheet: () => setSheetOpen(false), send, retryMsg, listen, stopListening, cancelVoice, sendTranscript, interrupt, speak, clearChat,
     }),
-    [messages, busy, stage, voiceState, voiceError, prompt, transcript, confidence, alternative, ttsOn, setTtsOn, liveDay, queued, online, sheetOpen, send, retryMsg, listen, stopListening, cancelVoice, sendTranscript, interrupt, speak, clearChat],
+    [messages, busy, stage, voiceState, voiceError, prompt, transcript, confidence, alternative, ttsOn, setTtsOn, liveDay, queued, online, sheetOpen, sttMode, send, retryMsg, listen, stopListening, cancelVoice, sendTranscript, interrupt, speak, clearChat],
   );
 
   return <CoachContext.Provider value={value}>{children}</CoachContext.Provider>;

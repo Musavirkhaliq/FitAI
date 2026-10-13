@@ -3,6 +3,7 @@ import Link from "next/link";
 import { ConsistencyRing } from "@/components/dashboard/ConsistencyRing";
 import { DayBars } from "@/components/dashboard/DayBars";
 import { HabitGrid } from "@/components/dashboard/HabitGrid";
+import { StreaksCard } from "@/components/dashboard/StreaksCard";
 import type { AnalyticsDto } from "@/components/dashboard/types";
 import { Badge, chartColors, ErrorState, LoadingBlock, Notice, PageHeader, ProgressBar } from "@/components/ui";
 import { CalorieAdviceCard } from "@/components/weight/CalorieAdviceCard";
@@ -38,6 +39,9 @@ export default function DashboardPage() {
   const to = today.data?.today;
   const analytics = useApi<AnalyticsDto>(to ? `/api/analytics?from=${addDays(to, -27)}&to=${to}` : null);
 
+  const streaks = useApi<AnalyticsDto>(to ? `/api/analytics?from=${addDays(to, -89)}&to=${to}` : null);
+  const streakData = streaks.data && streaks.data.days ? streaks.data : null;
+
   if (today.loading && !today.data) return <LoadingBlock label="Loading dashboard" rows={4} />;
   if (!today.data) return <ErrorState message={today.error ?? "I couldn't load your dashboard. Check your connection."} onRetry={() => void today.refresh()} />;
 
@@ -58,22 +62,36 @@ export default function DashboardPage() {
       <PageHeader title="Dashboard" subtitle="Your week at a glance. Patterns over days matter far more than any single day." />
       {err && <Notice tone="warn">{err}</Notice>}
 
-      {/* Consistency + habit grid */}
-      <section className="card grid gap-5 lg:grid-cols-2" aria-labelledby="cons-h">
-        <div className="space-y-3">
-          <h2 id="cons-h" className="text-sm font-semibold">Consistency</h2>
-          {consistency ? (
-            <ConsistencyRing score={consistency.score} label={consistency.label} />
-          ) : (
-            <p className="text-sm text-muted">Set a goal in Settings and I&apos;ll show a gentle weekly consistency score here.</p>
-          )}
-          <p className="text-xs text-muted">There are no streaks to protect. A missed day just counts as a missed day.</p>
-        </div>
-        <div>
-          <h3 className="mb-1 text-sm font-semibold">Habits, last 7 days</h3>
-          <HabitGrid days={week} goal={goal} />
-        </div>
-      </section>
+      {/* Consistency + habit grid + forgiving streaks */}
+      <div className="grid gap-4 lg:grid-cols-2">
+        <section className="card space-y-5" aria-labelledby="cons-h">
+          <div className="space-y-3">
+            <h2 id="cons-h" className="text-sm font-semibold">Consistency</h2>
+            {consistency ? (
+              <ConsistencyRing score={consistency.score} label={consistency.label} />
+            ) : (
+              <p className="text-sm text-muted">Set a goal in Settings and I&apos;ll show a gentle weekly consistency score here.</p>
+            )}
+            <p className="text-xs text-muted">A missed day just counts as a missed day. It never wipes out your progress.</p>
+          </div>
+          <div>
+            <h3 className="mb-1 text-sm font-semibold">Habits, last 7 days</h3>
+            <HabitGrid days={week} goal={goal} />
+          </div>
+        </section>
+        {streakData ? (
+          <StreaksCard days={streakData.days} today={streakData.to} targets={streakData.targets && { protein: streakData.targets.protein, steps: streakData.targets.steps }} plannedPerWeek={today.data.workout?.plan.daysPerWeek ?? null} />
+        ) : (
+          <section className="card space-y-3" aria-labelledby="streaks-h">
+            <h2 id="streaks-h" className="text-sm font-semibold">Streaks</h2>
+            {streaks.error && !streaks.loading ? (
+              <ErrorState message={streaks.error} onRetry={() => void streaks.refresh()} />
+            ) : (
+              <LoadingBlock label="Loading streaks" rows={2} />
+            )}
+          </section>
+        )}
+      </div>
 
       {/* Week at a glance */}
       <section aria-labelledby="week-h" className="space-y-3">

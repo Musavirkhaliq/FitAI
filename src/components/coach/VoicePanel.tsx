@@ -75,6 +75,13 @@ export function VoicePanel({ variant = "hero", autoFocusText = false }: { varian
         {c.prompt ?? status}
       </p>
 
+      {c.sttMode === "browser" && listening && c.transcript && (
+        <p className="w-full max-w-md rounded-xl bg-surface-2 px-3 py-2 text-center text-sm" aria-live="polite">“{c.transcript}”</p>
+      )}
+      {c.sttMode === "browser" && (
+        <p className="max-w-sm text-center text-xs text-muted">Using your browser&apos;s built-in speech recognition (best in Chrome or Edge). Your browser&apos;s provider processes the audio.</p>
+      )}
+
       {c.voiceError && (
         <p role="alert" className="w-full max-w-md rounded-xl border border-warn/40 bg-warn/10 px-3 py-2 text-center text-sm">
           {c.voiceError}

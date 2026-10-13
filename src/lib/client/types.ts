@@ -42,6 +42,10 @@ export interface DaySummaryDto {
   sleep: { hours: number; quality: number | null } | null;
   meals: { meal: MealType; entries: FoodEntryDto[]; totals: TotalsDto }[];
   totals: TotalsDto;
+  /** Estimated micronutrient totals so far today (mg/µg), summed from per-entry estimates. */
+  micros: Record<"calcium" | "iron" | "potassium" | "vitA" | "vitC" | "vitD" | "vitB12" | "folate" | "sodium", number>;
+  /** Approximate adult reference intakes for context. `limit` kinds (sodium) are upper guides, not goals. */
+  microRefs: { key: keyof DaySummaryDto["micros"]; label: string; unit: string; target: number; kind: "goal" | "limit" }[];
   activity: { steps: number; trainingMin: number; entries: { id: string; type: string; steps: number | null; durationMin: number | null; notes: string | null }[] };
   water: number;
   vegServings: number;

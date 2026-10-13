@@ -146,14 +146,19 @@ const tools = {
   },
 
   log_produce: {
-    schema: z.object({ date, vegServings: z.number().min(0).max(20).optional(), fruitServings: z.number().min(0).max(20).optional() }),
+    // Deltas, so the UI's "−" button can undo a mis-tap. The stored total never goes below 0.
+    schema: z.object({ date, vegServings: z.number().min(-20).max(20).optional(), fruitServings: z.number().min(-20).max(20).optional() }),
     async run(ctx: UserContext, a: { date: string; vegServings?: number; fruitServings?: number }) {
+      const cur = await db.dailyLog.findUnique({ where: { userId_date: { userId: ctx.userId, date: a.date } } });
+      const clamp = (n: number) => Math.min(40, Math.max(0, Math.round(n * 10) / 10));
+      const vegServings = clamp((cur?.vegServings ?? 0) + (a.vegServings ?? 0));
+      const fruitServings = clamp((cur?.fruitServings ?? 0) + (a.fruitServings ?? 0));
       const row = await db.dailyLog.upsert({
         where: { userId_date: { userId: ctx.userId, date: a.date } },
-        update: { vegServings: { increment: a.vegServings ?? 0 }, fruitServings: { increment: a.fruitServings ?? 0 } },
-        create: { userId: ctx.userId, date: a.date, vegServings: a.vegServings ?? 0, fruitServings: a.fruitServings ?? 0 },
+        update: { vegServings, fruitServings },
+        create: { userId: ctx.userId, date: a.date, vegServings, fruitServings },
       });
-      return { id: row.id };
+      return { id: row.id, vegServings: row.vegServings, fruitServings: row.fruitServings };
     },
   },
 
