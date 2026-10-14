@@ -88,14 +88,25 @@ export async function completeText(messages: ChatMessage[], opts: { role?: Model
   });
 }
 
-/** Strip code fences / prose around a JSON object. */
+/** Strip code fences / prose around a JSON object or array. */
 function extractJson(text: string): unknown {
   const fenced = text.match(/```(?:json)?\s*([\s\S]*?)```/i);
   const body = (fenced ? fenced[1] : text).trim();
-  const start = body.indexOf("{");
-  const end = body.lastIndexOf("}");
-  if (start === -1 || end === -1) throw new Error("no JSON object in model output");
-  return JSON.parse(body.slice(start, end + 1));
+  const objStart = body.indexOf("{");
+  const objEnd = body.lastIndexOf("}");
+  const arrStart = body.indexOf("[");
+  const arrEnd = body.lastIndexOf("]");
+
+  if (objStart !== -1 && objEnd > objStart && (arrStart === -1 || objStart < arrStart)) {
+    return JSON.parse(body.slice(objStart, objEnd + 1));
+  }
+  if (arrStart !== -1 && arrEnd > arrStart) {
+    return JSON.parse(body.slice(arrStart, arrEnd + 1));
+  }
+  if (objStart !== -1 && objEnd > objStart) {
+    return JSON.parse(body.slice(objStart, objEnd + 1));
+  }
+  throw new Error("no JSON object in model output");
 }
 
 /**
@@ -114,15 +125,17 @@ export async function completeJson<T>(
         ? messages
         : [...messages, { role: "user", content: `Your previous reply was invalid (${lastError}). Reply again with ONLY a valid JSON object matching the schema.` }];
     const raw = await withFallback(async (ep) => {
+      const tokens = Math.max(opts.maxTokens ?? 1200, 1500);
       try {
         const res = await ep.client.chat.completions.create({
           model: modelFor(ep, opts.role ?? "extract"),
           messages: msgs,
           temperature: 0,
-          max_tokens: opts.maxTokens ?? 900,
+          max_tokens: tokens,
           response_format: { type: "json_object" },
         });
-        return res.choices[0]?.message?.content ?? "";
+        const choice = res.choices[0]?.message;
+        return choice?.content || (choice as { reasoning?: string })?.reasoning || "";
       } catch (err: unknown) {
         // Groq sometimes returns 400 json_validate_failed / failed_generation when strict schema mode is forced
         const code = (err as { code?: string; error?: { code?: string } })?.code || (err as { error?: { code?: string } })?.error?.code;
@@ -132,9 +145,10 @@ export async function completeJson<T>(
             model: modelFor(ep, opts.role ?? "extract"),
             messages: msgs,
             temperature: 0,
-            max_tokens: opts.maxTokens ?? 900,
+            max_tokens: tokens,
           });
-          return fallbackRes.choices[0]?.message?.content ?? "";
+          const choice = fallbackRes.choices[0]?.message;
+          return choice?.content || (choice as { reasoning?: string })?.reasoning || "";
         }
         throw err;
       }
